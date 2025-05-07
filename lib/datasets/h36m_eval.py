@@ -19,7 +19,7 @@ class H36MEval(data.Dataset):
                         "walkingtogether"]
 
         self.h36m_motion_input_length =  config.motion.h36m_input_length
-        self.h36m_motion_target_length =  config.motion.h36m_target_length      # 等于25
+        self.h36m_motion_target_length =  config.motion.h36m_target_length
 
         self.motion_dim = config.motion.dim
         self.shift_step = config.shift_step
@@ -87,16 +87,17 @@ class H36MEval(data.Dataset):
         
         N = pose_info.shape[0]
 
-        root_translation = pose_info[:, 0, :]
-        print("Root translation:", root_translation)
+        root_translation = pose_info[:, 0, :].copy()
         
         pose_info[:, :2] = 0
         pose_info = pose_info.reshape(-1, 3)
         pose_info = expmap2rotmat_torch(torch.tensor(pose_info).float()).reshape(N, 33, 3, 3)[:, 1:]
-        
         pose_info = rotmat2xyz_torch(pose_info)
 
-        pose_info += root_translation[:, None, :]
+        root_translation = np.tile(root_translation[:, np.newaxis, :], (1, 32, 1))
+        root_translation = torch.tensor(root_translation).float()
+
+        pose_info = torch.add(pose_info, root_translation)
 
         sample_rate = 2
         sampled_index = np.arange(0, N, sample_rate)
@@ -106,6 +107,26 @@ class H36MEval(data.Dataset):
         h36m_motion_poses = h36m_motion_poses.reshape(T, 32, 3)
         return h36m_motion_poses
 
+    # def _preprocess(self, filename):
+    #     """
+    #     Load the motion file and return it as a tensor without preprocessing.
+    #     """
+    #     info = open(filename, 'r').readlines()
+    #     pose_info = []
+    #     for line in info:
+    #         line = line.strip().split(',')
+    #         if len(line) > 0:
+    #             pose_info.append(np.array([float(x) for x in line]))
+    #     pose_info = np.array(pose_info)
+        
+    #     # Reshape to match the original structure: [num_frames, num_joints, 3]
+    #     pose_info = pose_info.reshape(-1, 33, 3)
+        
+    #     # Convert to a PyTorch tensor
+    #     pose_info = torch.tensor(pose_info).float()
+        
+    #     return pose_info
+    
     def __getitem__(self, index):
         """
         returns h36m_motion_input: [number of input frames, num_joints, 3]

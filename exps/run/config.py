@@ -21,7 +21,7 @@ C.seed = 304
 C.abs_dir = osp.dirname(osp.realpath(__file__))
 C.this_dir = C.abs_dir.split(osp.sep)[-1]
 # C.repo_name = 'siMLPe'
-C.repo_name = 'GCNext'
+C.repo_name = 'HMP'
 C.root_dir = C.abs_dir[:C.abs_dir.index(C.repo_name) + len(C.repo_name)]
 
 
