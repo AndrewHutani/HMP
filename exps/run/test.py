@@ -3,7 +3,7 @@ import os, sys
 from scipy.spatial.transform import Rotation as R
 
 import numpy as np
-from config  import config
+from config import config
 from model import GCNext as Model
 from datasets.h36m_eval import H36MEval
 from utils.misc import rotmat2xyz_torch, rotmat2euler_torch
@@ -104,7 +104,7 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         # Set the axes to equal scale
         set_axes_equal(ax)    
 
-        plt.pause(1.0)  # Pause to display each frame
+        plt.pause(0.5)  # Pause to display each frame
 
     plt.show()
 
@@ -236,7 +236,7 @@ def regress_pred(model, pbar, num_samples, joint_used_xyz, m_p3d_h36, tau):
         predicted_positions = motion_pred[:, time_steps_indices, :, :].reshape(-1, 32, 3).cpu().numpy()
         ground_truth_positions = motion_gt[:, time_steps_indices, :, :].reshape(-1, 32, 3).cpu().numpy()
         # visualize_all_timesteps(predicted_positions, ground_truth_positions, time_steps_indices)
-
+        visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, time_steps_indices, title="Predicted vs Ground Truth Motion")
         mpjpe_p3d_h36 = torch.sum(torch.mean(torch.norm(motion_pred*1000 - motion_gt*1000, dim=3), dim=2), dim=0)
         m_p3d_h36 += mpjpe_p3d_h36.cpu().numpy()
     m_p3d_h36 = m_p3d_h36 / num_samples
