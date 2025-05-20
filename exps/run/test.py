@@ -181,7 +181,9 @@ def regress_pred(model, pbar, num_samples, joint_used_xyz, m_p3d_h36, tau):
     joint_to_ignore = np.array([16, 20, 23, 24, 28, 31]).astype(np.int64)
     joint_equal = np.array([13, 19, 22, 13, 27, 30]).astype(np.int64)
 
-    for (motion_input, motion_target) in pbar:
+    first_sample_pred = None  # Variable to store predictions for the first sample
+
+    for batch_idx, (motion_input, motion_target) in enumerate(pbar):
         motion_input = motion_input.cuda()
         b,n,c,_ = motion_input.shape
         num_samples += b
@@ -222,10 +224,16 @@ def regress_pred(model, pbar, num_samples, joint_used_xyz, m_p3d_h36, tau):
         motion_pred = motion_target.clone().reshape(b,n,32,3)
         motion_pred[:, :, joint_used_xyz] = pred_rot
 
+        # NOTE: only the joints in joint_used_xyz are predicted! the rest are copied from the ground truth
         tmp = motion_gt.clone()
         tmp[:, :, joint_used_xyz] = motion_pred[:, :, joint_used_xyz]
         motion_pred = tmp
         motion_pred[:, :, joint_to_ignore] = motion_pred[:, :, joint_equal]
+
+        # Check if this batch contains the first sample
+        if batch_idx == 0:
+            first_sample_pred = motion_pred[0].cpu().numpy()  # Store the first sample's predictions
+
 
         # Should be of shape [batch_size, num_frames, num_joints, 3]
         print(f"motion_pred shape: {motion_pred.shape}, motion_gt shape: {motion_gt.shape}")
@@ -236,11 +244,11 @@ def regress_pred(model, pbar, num_samples, joint_used_xyz, m_p3d_h36, tau):
         predicted_positions = motion_pred[:, time_steps_indices, :, :].reshape(-1, 32, 3).cpu().numpy()
         ground_truth_positions = motion_gt[:, time_steps_indices, :, :].reshape(-1, 32, 3).cpu().numpy()
         # visualize_all_timesteps(predicted_positions, ground_truth_positions, time_steps_indices)
-        visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, time_steps_indices, title="Predicted vs Ground Truth Motion")
+        # visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, time_steps_indices, title="Predicted vs Ground Truth Motion")
         mpjpe_p3d_h36 = torch.sum(torch.mean(torch.norm(motion_pred*1000 - motion_gt*1000, dim=3), dim=2), dim=0)
         m_p3d_h36 += mpjpe_p3d_h36.cpu().numpy()
     m_p3d_h36 = m_p3d_h36 / num_samples
-    return m_p3d_h36
+    return m_p3d_h36, first_sample_pred
 
 def test(config, model, dataloader, tau) :
 
@@ -249,16 +257,16 @@ def test(config, model, dataloader, tau) :
     joint_used_xyz = np.array([2,3,4,5,7,8,9,10,12,13,14,15,17,18,19,21,22,25,26,27,29,30]).astype(np.int64)
     num_samples = 0
     pbar = dataloader
-    m_p3d_h36 = regress_pred(model, pbar, num_samples, joint_used_xyz, m_p3d_h36, tau)
+    m_p3d_h36, first_sample_pred = regress_pred(model, pbar, num_samples, joint_used_xyz, m_p3d_h36, tau)
     ret = {}
     for j in range(config.motion.h36m_target_length):
         ret["#{:d}".format(titles[j])] = [m_p3d_h36[j], m_p3d_h36[j]]
-    return [ret[key][0] for key in results_keys]
+    return [ret[key][0] for key in results_keys], first_sample_pred
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--model-pth', type=str, default=None, help='=encoder path')
+    parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-84000.pth", help='=encoder path')
     parser.add_argument('--dyna', nargs='+', type=int, default=[0, 48])
     args = parser.parse_args()
 
@@ -282,7 +290,8 @@ if __name__ == "__main__":
                             sampler=sampler, shuffle=shuffle, pin_memory=True)
     
     TAU = 0.1
-    mpjpe = test(config, model, dataloader, TAU)
+    mpjpe, first_sample_pred = test(config, model, dataloader, TAU)
+    np.save("first_sample_pred.npy", first_sample_pred)
 
     # Print the MPJPE results
     print("Evaluation Results (MPJPE in mm):")

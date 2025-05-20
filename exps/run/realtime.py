@@ -28,13 +28,20 @@ class RealTimePrediction():
 
     def visualize_motion(self, motion_sequence, title = "Visualized motion"):
         # Define the connections between joints
+        # predicted_connections = [
+        #     (0, 1), (1, 2), (2, 3),
+        #     (4, 5), (5, 6), (6, 7),
+        #     (8 ,9), (9, 10), (10, 11),
+        #     (8, 12), (12, 13), (13, 14), (14, 15), (15, 16),
+        #     (8, 17), (17, 18), (18, 19), (19, 20), (20, 21),
+        # ]
         connections = [
-            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
-            (0, 6), (6, 7), (7, 8), (8, 9), (9, 10),
-            (11, 12), (12, 13), (13, 14), (14, 15),
-            (16, 17), (17, 18), (18, 19), (19, 20), (20, 21), (21, 22), (22, 23),
-            (24, 25), (25, 26), (26, 27), (27, 28), (28, 29), (29, 30), (30, 31)
-        ]
+        (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
+        (0, 6), (6, 7), (7, 8), (8, 9), (9, 10),
+        (11, 12), (12, 13), (13, 14), (14, 15),
+        (16, 17), (17, 18), (18, 19), (19, 20), (20, 21), (21, 22), (22, 23),
+        (24, 25), (25, 26), (26, 27), (27, 28), (28, 29), (29, 30), (30, 31)
+    ]
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
 
@@ -59,7 +66,10 @@ class RealTimePrediction():
                 ax.plot([joints[joint1, 0], joints[joint2, 0]],
                         [joints[joint1, 2], joints[joint2, 2]],
                         [joints[joint1, 1], joints[joint2, 1]], 'r', alpha=0.5)
-                
+            
+            # Add joint indices as text annotations
+            for joint_idx, (x, y, z) in enumerate(joints):
+                ax.text(x, z, y, str(joint_idx), color='blue', fontsize=8)
 
             plt.pause(0.1)  # Pause to display each frame
 
@@ -74,56 +84,79 @@ class RealTimePrediction():
         idct_m = np.linalg.inv(dct_m)
         return torch.tensor(dct_m).float().cuda(), torch.tensor(idct_m).float().cuda()
 
-    def predict(self, observed_motion):
+    def predict(self, observed_motion, visualize=False, debug=False):
         self.observed_motion.append(observed_motion)
-        self.regress_pred()
+        self.regress_pred(visualize, debug)
+        return self.observed_motion
 
-    def regress_pred(self):
-        print("Stacked observed motion shape:", torch.stack(self.observed_motion).shape)
+    def regress_pred(self, visualize=False, debug=False):
+        if debug:
+            print("Stacked observed motion shape:", torch.stack(self.observed_motion).shape)
         observed_motion = torch.stack(self.observed_motion).cuda()
-        n,c,_ = observed_motion.shape  # n: number of timesteps, c: number of joints
+        # if visualize:
+        #     self.visualize_motion(observed_motion.cpu(), title="Observed motion")
+        n, c, _ = observed_motion.shape  # n: number of timesteps, c: number of joints
         # Prepare input
         motion_input = observed_motion[:, self.joint_used_xyz, :].reshape(n, -1)  # Shape: [n, len(joint_used_xyz) * 3]
 
+        # Check if the input has enough timesteps
+        if motion_input.shape[0] < config.motion.h36m_input_length_dct:
+            # Pad the beginning with the first motion frame
+            padding = motion_input[:1, :].repeat(config.motion.h36m_input_length_dct - motion_input.shape[0], 1)
+            if debug:
+                print("Padded motion with {} timesteps".format(config.motion.h36m_input_length_dct - motion_input.shape[0]))
+            motion_input = torch.cat([padding, motion_input], dim=0)
+            
+        elif motion_input.shape[0] > config.motion.h36m_input_length_dct:
+            # Truncate the input to the last 50 timesteps
+            motion_input = motion_input[-config.motion.h36m_input_length_dct:, :]
+            if debug:
+                print("Truncated motion to {} timesteps".format(config.motion.h36m_input_length_dct))
+
+        motion_input = motion_input.unsqueeze(0) # Add batch dimension since the model expects a batch input. Shape: [1, 50, len(joint_used_xyz) * 3]
+        if debug:
+            print("motion_input shape:", motion_input.shape)
+
+        dct_m, idct_m = self.get_dct_matrix(config.motion.h36m_input_length_dct)
+        dct_m = dct_m.unsqueeze(0)
+        idct_m = idct_m.unsqueeze(0)
+        if debug:
+                print("dct_m shape:", dct_m.shape)
+                print("idct_m shape:", idct_m.shape)
+        
         with torch.no_grad():
-            dct_m, _ = self.get_dct_matrix(n)
-            _, idct_m = self.get_dct_matrix(50)
-            print("dct_m shape:", dct_m.shape)
-            print("idct_m shape:", idct_m.shape)
             if config.deriv_input:
                 motion_input_ = motion_input.clone()
-                motion_input_ = torch.matmul(dct_m[:n, :], motion_input_.cuda())
+                motion_input_ = torch.matmul(dct_m[:, :config.motion.h36m_input_length, :], motion_input_.cuda())
             else:
                 motion_input_ = motion_input.clone()
-            print("motion_input_ shape:", motion_input_.shape)
-            motion_input_ = motion_input_.unsqueeze(0)
-            print("motion_input_ shape after unsqueeze:", motion_input_.shape)
-
-            if motion_input_.shape[1] < config.motion.h36m_input_length_dct:
-                # Pad with the first motion frame if the number of timesteps is less than 50
-                padding = motion_input_[:, :1, :].repeat(1, config.motion.h36m_input_length_dct - motion_input_.shape[1], 1)
-                motion_input_ = torch.cat([padding, motion_input_], dim=1)
-            elif motion_input_.shape[1] > config.motion.h36m_input_length_dct:
-                # Truncate if the number of timesteps is greater than 50
-                motion_input_ = motion_input_[:, -config.motion.h36m_input_length_dct:, :]
 
             output = model(motion_input_, self.tau)
-            print("output shape:", output.shape)
-            output = torch.matmul(idct_m, output)
+            output = torch.matmul(idct_m[:, :, :config.motion.h36m_input_length], output)[:, :config.motion.h36m_target_length, :]
+            if debug:
+                print("Output shape after idct_m:", output.shape)
+
             if config.deriv_output:
-                last_frame = motion_input[-1:, :]  # Last observed frame
-                output = output + last_frame.unsqueeze(0).repeat(1, 50, 1)
-            output = output.reshape(50, -1, 3)
-            print("output shape after adding last frame:", output.shape)
-            motion_pred = torch.zeros(50, 32, 3).to(output.device)
+                output = output + motion_input[:, -1:, :].repeat(1,config.motion.h36m_target_length,1)
+            if debug:
+                print("Output shape after deriv_output:", output.shape)
+
+            output = output.reshape(config.motion.h36m_target_length, -1, 3)
+            if debug:
+                print("output shape after reshaping:", output.shape)
+
+            motion_pred = torch.zeros(25, 32, 3).to(output.device)
 
             motion_pred[:, self.joint_used_xyz, :] = output  # Fill in the predicted joints
             motion_pred[:, self.joint_to_ignore, :] = motion_pred[:, self.joint_equal, :]  # Equalize ignored joints
 
-            output = motion_pred
-            print("output shape after filling in joints:", output.shape)
-            print("----------------------------------------------------------\n")
-            self.visualize_motion(output.cpu())
+            # output = motion_pred
+            if debug:
+                print("output shape after filling in joints:", output.shape)
+                print("----------------------------------------------------------\n")
+            if visualize:
+                self.visualize_motion(motion_pred.cpu())
+                # np.save("realtime_predictions.npy", output.cpu())
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-84000.pth", help='=encoder path')
@@ -140,8 +173,13 @@ dataset = H36MEval(config, 'test')
 test_input, _ = dataset.__getitem__(0)
 print("test_input shape:", test_input.shape)
 
-reatime_predictor = RealTimePrediction(model, config, tau=0.5)
-reatime_predictor.predict(test_input[0])
-reatime_predictor.predict(test_input[1])
-reatime_predictor.predict(test_input[2])
-reatime_predictor.predict(test_input[3])
+realtime_predictor = RealTimePrediction(model, config, tau=0.5)
+for i in range(test_input.shape[0]):
+    visualize = False if i != 49 else True
+    debug = True if i != 49 else True
+    motion_input = realtime_predictor.predict(test_input[i], visualize, debug)
+
+print("Model uses the following motion_input: ", torch.stack(motion_input).shape)
+
+# The motion_input from the model should be the same as the test_input
+assert torch.all(torch.eq(test_input, torch.stack(motion_input)))
