@@ -23,6 +23,7 @@ class H36MEval(data.Dataset):
 
         self.motion_dim = config.motion.dim
         self.shift_step = config.shift_step
+        self.seq_to_action = []
         self._h36m_files = self._get_h36m_files()
         self._file_length = len(self.data_idx)
 
@@ -52,7 +53,9 @@ class H36MEval(data.Dataset):
                 poses1 = self._preprocess(filename1)
 
                 self.h36m_seqs.append(poses0)
+                self.seq_to_action.append(act)  # Track action for poses0
                 self.h36m_seqs.append(poses1)
+                self.seq_to_action.append(act)  # Track action for poses1
 
                 num_frames0 = poses0.shape[0]
                 num_frames1 = poses1.shape[0]
@@ -106,6 +109,9 @@ class H36MEval(data.Dataset):
         T = h36m_motion_poses.shape[0]
         h36m_motion_poses = h36m_motion_poses.reshape(T, 32, 3)
         return h36m_motion_poses
+    
+    def get_indices_for_action(self, action_name):
+        return [i for i, (seq_idx, _) in enumerate(self.data_idx) if self.seq_to_action[seq_idx] == action_name]
 
     # def _preprocess(self, filename):
     #     """

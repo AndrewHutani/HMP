@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.animation as animation
 
 results_keys = ['#2', '#10', '#14', '#25']
 time_steps = [2, 10, 14, 25]
@@ -38,7 +39,7 @@ def set_axes_equal(ax):
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
-def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, time_steps, title="Predicted vs Ground Truth Motion"):
+def visualize_motion_with_ground_truth(predicted_positions, time_steps, title="Predicted vs Ground Truth Motion"):
     """
     Visualize the predicted motion and ground truth in 3D for specific time steps, with skeleton connections.
 
@@ -80,7 +81,7 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         # ax.scatter(predicted_joints[:, 0], predicted_joints[:, 2], predicted_joints[:, 1], c='r', marker='o', label='Predicted')
 
         # Plot ground truth joints for the specific frame
-        ground_truth_joints = ground_truth_positions[frame_idx - 1]
+        # ground_truth_joints = ground_truth_positions[frame_idx - 1]
         # ax.scatter(ground_truth_joints[:, 0], ground_truth_joints[:, 2], ground_truth_joints[:, 1], c='b', marker='^', label='Ground Truth')
 
         # Draw skeleton connections for predicted motion
@@ -89,12 +90,12 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
             ax.plot([predicted_joints[joint1, 0], predicted_joints[joint2, 0]],
                     [predicted_joints[joint1, 2], predicted_joints[joint2, 2]],
                     [predicted_joints[joint1, 1], predicted_joints[joint2, 1]], 'r', alpha=0.5)
-            ax.plot(
-                [ground_truth_joints[joint1, 0], ground_truth_joints[joint2, 0]],
-                [ground_truth_joints[joint1, 2], ground_truth_joints[joint2, 2]],
-                [ground_truth_joints[joint1, 1], ground_truth_joints[joint2, 1]],
-                c='b'
-            )
+            # ax.plot(
+            #     [ground_truth_joints[joint1, 0], ground_truth_joints[joint2, 0]],
+            #     [ground_truth_joints[joint1, 2], ground_truth_joints[joint2, 2]],
+            #     [ground_truth_joints[joint1, 1], ground_truth_joints[joint2, 1]],
+            #     c='b'
+            # )
 
         # Add dummy scatter plots for the legend
         ax.scatter([], [], [], c='r', marker='o', label='Predicted')
@@ -104,27 +105,20 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         # Set the axes to equal scale
         set_axes_equal(ax)    
 
-        plt.pause(0.5)  # Pause to display each frame
+        plt.pause(10)  # Pause to display each frame
 
     plt.show()
 
-def visualize_all_timesteps(predicted_positions, ground_truth_positions, time_steps, title="Predicted Motion"):
+def visualize_all_timesteps(predicted_positions, ground_truth_positions, time_steps, title="Input Motion", gif_path="predicted_vs_ground_truth.gif"):
     """
-    Visualize all predicted and ground truth motions in a grid of 3D plots.
+    Save an animation of predicted and ground truth motions as a GIF.
 
-    :param predicted_positions: Tensor of shape [num_frames, num_joints, 3] (predicted motion)
-    :param ground_truth_positions: Tensor of shape [num_frames, num_joints, 3] (ground truth motion)
-    :param time_steps: List of time steps to visualize (e.g., [1, 2, ..., 25])
+    :param predicted_positions: [num_frames, num_joints, 3]
+    :param ground_truth_positions: [num_frames, num_joints, 3]
+    :param time_steps: List of time steps to visualize
     :param title: Title of the plot
+    :param gif_path: Path to save the GIF
     """
-    num_timesteps = len(time_steps)
-    cols = 8  # Number of columns in the grid
-    rows = (num_timesteps + cols - 1) // cols  # Calculate the number of rows needed
-
-    fig = plt.figure(figsize=(5, rows * 4))  # Adjust figure size as needed
-    fig.suptitle(title, fontsize=16)
-
-    # Define the connections between joints
     connections = [
         (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
         (0, 6), (6, 7), (7, 8), (8, 9), (9, 10),
@@ -133,35 +127,50 @@ def visualize_all_timesteps(predicted_positions, ground_truth_positions, time_st
         (24, 25), (25, 26), (26, 27), (27, 28), (28, 29), (29, 30), (30, 31)
     ]
 
-    for i, frame_idx in enumerate(time_steps):
-        ax = fig.add_subplot(rows, cols, i + 1, projection='3d')
-        ax.set_xlim([-0.75, 0.75])
-        ax.set_ylim([-0.75, 0.75])
-        ax.set_zlim([-0.75, 0.75])
+    fig = plt.figure(figsize=(6, 6))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_xlim([-0.75, 0.75])
+    ax.set_ylim([-0.75, 0.75])
+    ax.set_zlim([-0.75, 0.75])
+    ax.set_title(title)
+    ax.view_init(elev=20, azim=55)
+    images = []
 
-         # Hide the tick values but keep the gridlines and axis labels
-        ax.tick_params(axis='x', labelbottom=False)  # Hide X-axis tick values
-        ax.tick_params(axis='y', labelleft=False)   # Hide Y-axis tick values
-        ax.tick_params(axis='z', labelleft=False)   # Hide Z-axis tick values
+    def update(frame_idx):
+        ax.cla()
+        ax.set_xlim([-1, 1])
+        ax.set_ylim([-1, 1])
+        ax.set_zlim([-1, 1])
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+        ax.grid(True)  # <-- Add this line to show the grid
 
-
-        # Update the title to include the current time step
-        # ax.set_title(f"Time Step #{frame_idx}", pad=-15)
-        ax.view_init(elev=20, azim=55)  # Adjust elevation and azimuth as needed
-
-        # Plot predicted joints for the specific frame
-        predicted_joints = predicted_positions[frame_idx]  # Subtract 1 because time_steps are 1-based
-        # Draw skeleton connections for predicted motion
+        ax.set_title(f"{title} - Frame {frame_idx+1}")
+        
+        pred = predicted_positions[frame_idx]
+        gt = ground_truth_positions[frame_idx]
+        # Draw predicted skeleton
         for connection in connections:
             joint1, joint2 = connection
-            ax.plot([predicted_joints[joint1, 0], predicted_joints[joint2, 0]],
-                    [predicted_joints[joint1, 2], predicted_joints[joint2, 2]],
-                    [predicted_joints[joint1, 1], predicted_joints[joint2, 1]], 'r', alpha=0.5)
+            ax.plot([pred[joint1, 0], pred[joint2, 0]],
+                    [pred[joint1, 2], pred[joint2, 2]],
+                    [pred[joint1, 1], pred[joint2, 1]], 'r', alpha=0.7)
+        # # Draw ground truth skeleton
+        for connection in connections:
+            joint1, joint2 = connection
+            ax.plot([gt[joint1, 0], gt[joint2, 0]],
+                    [gt[joint1, 2], gt[joint2, 2]],
+                    [gt[joint1, 1], gt[joint2, 1]], 'b', alpha=0.5)
+        ax.scatter(pred[:, 0], pred[:, 2], pred[:, 1], c='r', marker='o', label='Predicted')
+        ax.scatter(gt[:, 0], gt[:, 2], gt[:, 1], c='b', marker='^', label='Ground Truth')
+        ax.legend()
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to fit the title
-    plt.savefig("predicted_vs_ground_truth.png", format="png", dpi=300)
-    plt.show()
-    
+    ani = animation.FuncAnimation(fig, update, frames=len(time_steps), interval=200)
+    ani.save(gif_path, writer='pillow', fps=5)
+    plt.close(fig)
+    print(f"Saved GIF to {gif_path}")   
+
 def get_dct_matrix(N):
     dct_m = np.eye(N)
     for k in np.arange(N):
@@ -189,6 +198,7 @@ def regress_pred(model, pbar, num_samples, joint_used_xyz, m_p3d_h36, tau):
         num_samples += b
 
         motion_input = motion_input.reshape(b, n, 32, 3)
+        moition_input_ = motion_input.clone()
         motion_input = motion_input[:, :, joint_used_xyz].reshape(b, n, -1)
         outputs = []
         step = config.motion.h36m_target_length_train
@@ -244,7 +254,13 @@ def regress_pred(model, pbar, num_samples, joint_used_xyz, m_p3d_h36, tau):
         predicted_positions = motion_pred[:, time_steps_indices, :, :].reshape(-1, 32, 3).cpu().numpy()
         ground_truth_positions = motion_gt[:, time_steps_indices, :, :].reshape(-1, 32, 3).cpu().numpy()
         # visualize_all_timesteps(predicted_positions, ground_truth_positions, time_steps_indices)
-        # visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, time_steps_indices, title="Predicted vs Ground Truth Motion")
+        print(moition_input_.shape)
+        print(predicted_positions.shape)
+        input_motion = moition_input_[:, time_steps_indices, :, :].reshape(-1, 32, 3).cpu().numpy()
+        # visualize_motion_with_ground_truth(input_motion, time_steps_indices, title="Predicted vs Ground Truth Motion")
+        if batch_idx == 0:
+            visualize_all_timesteps(predicted_positions, ground_truth_positions, time_steps_indices, title="Output Motion", gif_path="predicted_vs_ground_truth.gif")
+        
         mpjpe_p3d_h36 = torch.sum(torch.mean(torch.norm(motion_pred*1000 - motion_gt*1000, dim=3), dim=2), dim=0)
         m_p3d_h36 += mpjpe_p3d_h36.cpu().numpy()
     m_p3d_h36 = m_p3d_h36 / num_samples

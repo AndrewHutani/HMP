@@ -16,7 +16,7 @@ class RealTimePrediction():
         self.model = model
         self.model.eval()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"Using device: {self.device}")
+        # print(f"Using device: {self.device}")
         self.model.to(self.device)
         self.joint_used_xyz = np.array([2,3,4,5,7,8,9,10,12,13,14,15,17,18,19,21,22,25,26,27,29,30]).astype(np.int64)
         self.joint_to_ignore = np.array([16, 20, 23, 24, 28, 31]).astype(np.int64)
@@ -25,8 +25,9 @@ class RealTimePrediction():
 
         self.observed_motion = []
         self.predicted_motion = []
+        self.ground_truth = []
 
-    def visualize_motion(self, motion_sequence, title = "Visualized motion"):
+    def visualize_motion(self, motion_sequence, ground_truth = None, title = "Visualized motion"):
         # Define the connections between joints
         # connections = [
         #     (0, 1), (1, 2), (2, 3),
@@ -60,13 +61,20 @@ class RealTimePrediction():
             ax.set_zlabel("Z")
 
             joints = motion_sequence[frame_idx]
-
             # Draw skeleton connections for predicted motion
             for connection in connections:
                 joint1, joint2 = connection
                 ax.plot([joints[joint1, 0], joints[joint2, 0]],
                         [joints[joint1, 2], joints[joint2, 2]],
                         [joints[joint1, 1], joints[joint2, 1]], 'r', alpha=0.5)
+                if ground_truth is not None:
+                    gt_joints = ground_truth[frame_idx]
+                    ax.plot([gt_joints[joint1, 0], gt_joints[joint2, 0]],
+                        [gt_joints[joint1, 2], gt_joints[joint2, 2]],
+                        [gt_joints[joint1, 1], gt_joints[joint2, 1]], 'b', alpha=0.5)
+
+
+
             plt.pause(0.1)  # Pause to display each frame
         plt.show(block=True)
 
@@ -112,6 +120,50 @@ class RealTimePrediction():
 
         plt.show()
 
+    def visualize_input_and_output(self, input_motion, output_motion, gif_path="input_output.gif"):
+        import matplotlib.animation as animation
+
+        connections = [
+            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
+            (0, 6), (6, 7), (7, 8), (8, 9), (9, 10),
+            (11, 12), (12, 13), (13, 14), (14, 15),
+            (16, 17), (17, 18), (18, 19), (19, 20), (20, 21), (21, 22), (22, 23),
+            (24, 25), (25, 26), (26, 27), (27, 28), (28, 29), (29, 30), (30, 31)
+        ]
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.view_init(elev=20, azim=55)
+
+        total_frames = input_motion.shape[0] + output_motion.shape[0]
+
+        def update(frame_idx):
+            ax.clear()
+            ax.set_xlim([-1, 1])
+            ax.set_ylim([-1, 1])
+            ax.set_zlim([-1, 1])
+            ax.set_xlabel("X")
+            ax.set_ylabel("Y")
+            ax.set_zlabel("Z")
+            if frame_idx < input_motion.shape[0]:
+                ax.set_title(f"Input Motion - Frame: {frame_idx}")
+                joints = input_motion[frame_idx]
+                color = 'r'
+            else:
+                out_idx = frame_idx - input_motion.shape[0]
+                ax.set_title(f"Predicted Motion - Frame: {out_idx}")
+                joints = output_motion[out_idx]
+                color = 'g'
+            for connection in connections:
+                joint1, joint2 = connection
+                ax.plot([joints[joint1, 0], joints[joint2, 0]],
+                        [joints[joint1, 2], joints[joint2, 2]],
+                        [joints[joint1, 1], joints[joint2, 1]], color, alpha=0.7)
+
+        ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=100)
+        ani.save(gif_path, writer='pillow', fps=10)
+        plt.close(fig)
+        print(f"Saved GIF to {gif_path}")
+
     def get_dct_matrix(self, N):
         dct_m = np.eye(N)
         for k in np.arange(N):
@@ -123,14 +175,17 @@ class RealTimePrediction():
         idct_m = np.linalg.inv(dct_m)
         return torch.tensor(dct_m).float().cuda(), torch.tensor(idct_m).float().cuda()
 
-    def predict(self, observed_motion, visualize=False, debug=False):
+    def predict(self, observed_motion, ground_truth, visualize=False, debug=False):
         self.observed_motion.append(observed_motion)
+        self.ground_truth = ground_truth.cpu().detach().numpy()
         self.regress_pred(visualize, debug)
         return self.observed_motion
     
-    def batch_predict(self, observed_motion, visualize=False, debug=False):
+    def batch_predict(self, observed_motion, ground_truth, visualize=False, debug=False):
+        self.observed_motion = []
         for i in range(observed_motion.shape[0]):
             self.observed_motion.append(observed_motion[i])
+        self.ground_truth = ground_truth.cpu().detach().numpy()
         self.regress_pred(visualize, debug)
         return self.observed_motion
     
@@ -161,8 +216,6 @@ class RealTimePrediction():
             motion_window = torch.cat([pad, observed_motion], dim=0)
         else:
             motion_window = observed_motion[:input_length].clone()
-
-        print("motion_window shape:", motion_window.shape)
 
 
         dct_m, idct_m = self.get_dct_matrix(config.motion.h36m_input_length_dct)
@@ -216,8 +269,17 @@ class RealTimePrediction():
             print("----------------------------------------------------------\n")
         if visualize:
             # self.plot_multiple_skeletons(self.predicted_motion)
-            self.visualize_motion(self.predicted_motion, title="Predicted Motion")
+            self.visualize_motion(self.predicted_motion, self.ground_truth, title="Predicted Motion")
+            # self.visualize_input_and_output(observed_motion.cpu(), self.predicted_motion)
             # np.save("realtime_predictions.npy", output.cpu())
+
+    def evaluate(self):
+        """
+        ground_truth: [25, 32, 3] - the ground truth motion
+        """
+        mpjpe = np.mean(np.linalg.norm(self.predicted_motion*1000 - self.ground_truth*1000, axis=2), axis=1)
+        selected_timesteps = [1, 9, 14, 24]
+        return mpjpe[selected_timesteps]
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-84000.pth", help='=encoder path')
@@ -229,21 +291,41 @@ model = Model(config, args.dyna)
 state_dict = torch.load(args.model_pth)
 model.load_state_dict(state_dict, strict=True)
 
-config.motion.h36m_target_length = config.motion.h36m_target_length_eval
-dataset = H36MEval(config, 'test')
-test_input, _ = dataset.__getitem__(15)
-print("test_input shape:", test_input.shape)
 
-realtime_predictor = RealTimePrediction(model, config, tau=0.5)
-visualize = True
-debug = True
-# motion_input = realtime_predictor.batch_predict(test_input, visualize, debug)
-for i in range(test_input.shape[0]):
-    visualize = True if i != 49 else True
-    debug = False if i != 49 else True
-    motion_input = realtime_predictor.predict(test_input[i], visualize, debug)
+actions = ["walking", "eating", "smoking", "discussion", "directions",
+                        "greeting", "phoning", "posing", "purchases", "sitting",
+                        "sittingdown", "takingphoto", "waiting", "walkingdog",
+                        "walkingtogether"]
 
-print("Model uses the following motion_input: ", torch.stack(motion_input).shape)
+for action in actions:
+    config.motion.h36m_target_length = config.motion.h36m_target_length_eval
+    dataset = H36MEval(config, 'test')
+    walking_indices = dataset.get_indices_for_action(action)
 
-# The motion_input from the model should be the same as the test_input
-assert torch.all(torch.eq(test_input, torch.stack(motion_input)))
+    realtime_predictor = RealTimePrediction(model, config, tau=0.5)
+    visualize = True
+    debug = True
+    mpjpe_all_samples = []
+
+    for idx in walking_indices:
+        print("Progress: {}/{}".format(idx+1, len(walking_indices)))
+        test_input, test_output = dataset.__getitem__(idx)
+        full_motion = torch.cat([test_input, test_output], dim=0)
+        realtime_predictor = RealTimePrediction(model, config, tau=0.5)  # re-init to clear state
+        mpjpe_per_obs = []
+        for i in range(test_input.shape[0]):
+            test_input_ = test_input[-(i+1):]
+            ground_truth = full_motion[-25:, :, :]
+            visualize = False
+            debug = False
+            motion_input = realtime_predictor.batch_predict(test_input_, ground_truth, visualize, debug)
+            mpjpe = realtime_predictor.evaluate()  # shape: (4,) for your 4 selected timesteps
+            mpjpe_per_obs.append(mpjpe)
+        mpjpe_all_samples.append(np.stack(mpjpe_per_obs))  # shape: (obs_len, 4)
+
+    mpjpe_all_samples = np.stack(mpjpe_all_samples)  # shape: (num_samples, obs_len, 4)
+    mpjpe_mean = np.mean(mpjpe_all_samples, axis=0)  # shape: (obs_len, 4)
+
+    print("Averaged MPJPE for each observation length and each selected timestep: {}".format(action))
+    for obs_len in range(mpjpe_mean.shape[0]):
+        print(f"Obs {obs_len+1}: {mpjpe_mean[obs_len]}")
