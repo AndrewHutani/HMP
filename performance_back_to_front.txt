@@ -1,4 +1,4 @@
-Averaged MPJPE for each observation length and each selected timestep: walking
+Averaged MPJPE for each observation length and each selected timestep: Walking
 Obs 1: [ 34.072826 124.10203  144.5306   129.61963 ]
 Obs 2: [ 19.338533  83.74653  104.78256  124.29251 ]
 Obs 3: [ 15.479359  76.40518   90.07709  115.585335]
@@ -50,7 +50,7 @@ Obs 48: [10.226731 41.91462  51.304188 59.146843]
 Obs 49: [10.216485 41.775352 51.056534 58.946278]
 Obs 50: [10.219236 41.840225 51.203182 58.854736]
 
-Averaged MPJPE for each observation length and each selected timestep: eating
+Averaged MPJPE for each observation length and each selected timestep: Eating
 Obs 1: [ 16.63913  65.11113  84.64906 101.32751]
 Obs 2: [11.192121 52.407047 71.36349  97.50741 ]
 Obs 3: [ 9.264146 49.67183  64.51307  88.44255 ]
@@ -102,7 +102,7 @@ Obs 48: [ 6.1363263 36.811886  53.58174   76.08476  ]
 Obs 49: [ 6.135691 36.799534 53.586906 76.058876]
 Obs 50: [ 6.1319423 36.800743  53.583176  76.02782  ]
 
-Averaged MPJPE for each observation length and each selected timestep: smoking
+Averaged MPJPE for each observation length and each selected timestep: Smoking
 Obs 1: [17.458965 66.497215 82.91234  99.102455]
 Obs 2: [11.469794 54.06982  66.05962  87.79073 ]
 Obs 3: [ 8.892864 50.27454  63.155415 83.361015]
@@ -154,7 +154,7 @@ Obs 48: [ 6.6928864 37.39854   52.009335  71.25247  ]
 Obs 49: [ 6.697946 37.403282 52.009975 71.22997 ]
 Obs 50: [ 6.6971087 37.422382  52.011658  71.218636 ]
 
-Averaged MPJPE for each observation length and each selected timestep: discussion
+Averaged MPJPE for each observation length and each selected timestep: Discussion
 Obs 1: [ 24.720322  88.97774  112.87332  132.99179 ]
 Obs 2: [ 17.166372  79.153275 103.47444  125.15489 ]
 Obs 3: [ 12.498213  73.358116  96.31141  119.396965]
@@ -206,7 +206,7 @@ Obs 48: [  9.802884  66.86675   92.07564  116.75019 ]
 Obs 49: [  9.802015  66.88231   92.06912  116.73436 ]
 Obs 50: [  9.807722  66.93207   92.153824 116.83864 ]
 
-Averaged MPJPE for each observation length and each selected timestep: directions
+Averaged MPJPE for each observation length and each selected timestep: Directions
 Obs 1: [ 18.948349  76.24531   94.319916 119.05143 ]
 Obs 2: [ 13.248141  71.590385  91.60408  122.04283 ]
 Obs 3: [ 10.15276  68.3563   87.18584 116.59937]
@@ -258,7 +258,7 @@ Obs 48: [  6.8497095  57.84576    79.29626   107.412346 ]
 Obs 49: [  6.850467  57.88459   79.31232  107.42637 ]
 Obs 50: [  6.8509045  57.87451    79.310486  107.47808  ]
 
-Averaged MPJPE for each observation length and each selected timestep: greeting
+Averaged MPJPE for each observation length and each selected timestep: Greeting
 Obs 1: [ 31.10718  111.181366 133.2111   155.73393 ]
 Obs 2: [ 21.098566  97.75421  121.61257  144.96587 ]
 Obs 3: [ 16.025902  90.14887  112.98439  138.93007 ]
@@ -310,7 +310,7 @@ Obs 48: [ 12.900951  80.10887  107.706726 137.64085 ]
 Obs 49: [ 12.896057  80.10343  107.710976 137.61786 ]
 Obs 50: [ 12.895302  80.08954  107.76654  137.709   ]
 
-Averaged MPJPE for each observation length and each selected timestep: phoning
+Averaged MPJPE for each observation length and each selected timestep: Phoning
 Obs 1: [ 20.0426    78.32736   99.541046 123.7721  ]
 Obs 2: [ 14.210532  64.46529   86.498665 121.881874]
 Obs 3: [ 10.657071  60.61106   81.05131  115.54592 ]
@@ -362,7 +362,7 @@ Obs 48: [  8.31628   50.106472  71.74282  104.5003  ]
 Obs 49: [  8.315126  50.1114    71.74982  104.46582 ]
 Obs 50: [  8.320003  50.10718   71.76958  104.47762 ]
 
-Averaged MPJPE for each observation length and each selected timestep: posing
+Averaged MPJPE for each observation length and each selected timestep: Posing
 Obs 1: [ 24.844126 103.56529  138.66461  192.02385 ]
 Obs 2: [ 18.065767  98.64461  134.14835  183.54512 ]
 Obs 3: [ 13.012621  90.24533  125.41203  179.34706 ]
@@ -414,7 +414,7 @@ Obs 48: [  9.132344  75.24123  110.71903  164.69086 ]
 Obs 49: [  9.133199  75.25275  110.720665 164.74756 ]
 Obs 50: [  9.140101  75.28063  110.7594   164.72122 ]
 
-Averaged MPJPE for each observation length and each selected timestep: purchases
+Averaged MPJPE for each observation length and each selected timestep: Purchases
 Obs 1: [ 27.192114  92.80758  116.2089   147.32913 ]
 Obs 2: [ 23.641312  90.17152  114.02556  144.64098 ]
 Obs 3: [ 15.131057  80.96138  104.18567  138.92026 ]
@@ -466,7 +466,7 @@ Obs 48: [ 12.160378  75.7019   102.61419  137.0196  ]
 Obs 49: [ 12.159084  75.768814 102.691    137.12111 ]
 Obs 50: [ 12.155007  75.84053  102.78972  137.23717 ]
 
-Averaged MPJPE for each observation length and each selected timestep: sitting
+Averaged MPJPE for each observation length and each selected timestep: Sitting
 Obs 1: [ 17.107126  66.488144  89.38522  121.78658 ]
 Obs 2: [ 15.807508  66.90606   90.30057  122.84284 ]
 Obs 3: [ 10.372895  60.008835  83.9537   118.18193 ]
@@ -518,7 +518,7 @@ Obs 48: [  8.865655  55.937767  80.74474  115.266945]
 Obs 49: [  8.865387  55.959187  80.77659  115.31222 ]
 Obs 50: [  8.864993  55.969334  80.79441  115.34839 ]
 
-Averaged MPJPE for each observation length and each selected timestep: sittingdown
+Averaged MPJPE for each observation length and each selected timestep: Sittingdown
 Obs 1: [ 24.796692  87.6945   116.57334  155.19595 ]
 Obs 2: [ 24.014788  87.38108  116.00753  153.97592 ]
 Obs 3: [ 15.700682  76.850174 106.56277  148.26439 ]
@@ -570,7 +570,7 @@ Obs 48: [ 14.146675  73.03799  102.69745  143.84242 ]
 Obs 49: [ 14.144988  73.01192  102.684326 143.84225 ]
 Obs 50: [ 14.143611  73.03367  102.69997  143.85541 ]
 
-Averaged MPJPE for each observation length and each selected timestep: takingphoto
+Averaged MPJPE for each observation length and each selected timestep: Takingphoto
 Obs 1: [ 17.265068  68.70305   93.45507  129.57086 ]
 Obs 2: [ 13.472925  66.616295  93.03747  134.92119 ]
 Obs 3: [  9.779366  62.96964   89.7973   132.6091  ]
@@ -622,7 +622,7 @@ Obs 48: [  8.072867  53.36784   79.09687  118.491486]
 Obs 49: [  8.0705385  53.387794   79.11602   118.53065  ]
 Obs 50: [  8.072632  53.376167  79.08477  118.50557 ]
 
-Averaged MPJPE for each observation length and each selected timestep: waiting
+Averaged MPJPE for each observation length and each selected timestep: Waiting
 Obs 1: [ 22.00745   85.1662   107.242424 127.030556]
 Obs 2: [ 14.521646  74.81522   95.40763  123.42876 ]
 Obs 3: [ 11.224809  68.961105  89.80899  116.198235]
@@ -674,7 +674,7 @@ Obs 48: [  8.077237  55.089558  77.31208  105.71689 ]
 Obs 49: [  8.076551  55.078136  77.26256  105.63981 ]
 Obs 50: [  8.07923   55.110798  77.286514 105.68827 ]
 
-Averaged MPJPE for each observation length and each selected timestep: walkingdog
+Averaged MPJPE for each observation length and each selected timestep: WalkingDog
 Obs 1: [ 37.383446 110.73747  129.73293  158.67531 ]
 Obs 2: [ 28.631187 109.296715 132.59915  166.91599 ]
 Obs 3: [ 21.012205  97.67866  122.75644  157.4677  ]
@@ -726,7 +726,7 @@ Obs 48: [ 18.66395   86.729195 112.710976 147.25433 ]
 Obs 49: [ 18.666649  86.78931  112.74308  147.21425 ]
 Obs 50: [ 18.675274  86.75368  112.63525  147.21602 ]
 
-Averaged MPJPE for each observation length and each selected timestep: walkingtogether
+Averaged MPJPE for each observation length and each selected timestep: Walkingtogether
 Obs 1: [ 26.637148  99.02556  117.348045 117.03099 ]
 Obs 2: [ 14.571694  69.03887   82.094154 106.7292  ]
 Obs 3: [11.715049 66.23719  76.502975 97.63913 ]
