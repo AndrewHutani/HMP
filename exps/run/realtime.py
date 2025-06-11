@@ -185,6 +185,8 @@ class RealTimePrediction():
         self.observed_motion = []
         for i in range(observed_motion.shape[0]):
             self.observed_motion.append(observed_motion[i])
+        if visualize:
+            self.visualize_motion(observed_motion.cpu(), title="Observed motion")
         self.ground_truth = ground_truth.cpu().detach().numpy()
         self.regress_pred(visualize, debug)
         return self.observed_motion
@@ -203,8 +205,6 @@ class RealTimePrediction():
         if debug:
             print("Stacked observed motion shape:", torch.stack(self.observed_motion).shape)
         observed_motion = torch.stack(self.observed_motion).cuda()
-        # if visualize:
-        #     self.visualize_motion(observed_motion.cpu(), title="Observed motion")
         n, c, _ = observed_motion.shape  # n: number of timesteps, c: number of joints
         # Prepare input
         motion_input = observed_motion[:, self.joint_used_xyz, :].reshape(n, -1)  # Shape: [n, len(joint_used_xyz) * 3]
@@ -298,6 +298,7 @@ actions = ["walking", "eating", "smoking", "discussion", "directions",
                         "walkingtogether"]
 
 for action in actions:
+    print(f"Evaluating action: {action}")
     config.motion.h36m_target_length = config.motion.h36m_target_length_eval
     dataset = H36MEval(config, 'test')
     walking_indices = dataset.get_indices_for_action(action)
@@ -307,16 +308,16 @@ for action in actions:
     debug = True
     mpjpe_all_samples = []
 
-    for idx in walking_indices:
+    for idx in walking_indices[0:4]:
         print("Progress: {}/{}".format(idx+1, len(walking_indices)))
         test_input, test_output = dataset.__getitem__(idx)
         full_motion = torch.cat([test_input, test_output], dim=0)
         realtime_predictor = RealTimePrediction(model, config, tau=0.5)  # re-init to clear state
         mpjpe_per_obs = []
-        for i in range(test_input.shape[0]):
-            test_input_ = test_input[-(i+1):]
+        for i in range(1):
+            test_input_ = test_input
             ground_truth = full_motion[-25:, :, :]
-            visualize = False
+            visualize = True
             debug = False
             motion_input = realtime_predictor.batch_predict(test_input_, ground_truth, visualize, debug)
             mpjpe = realtime_predictor.evaluate()  # shape: (4,) for your 4 selected timesteps
