@@ -120,7 +120,7 @@ class RealTimePrediction():
 
         plt.show()
 
-    def visualize_input_and_output(self, input_motion, output_motion, gif_path="input_output.gif"):
+    def visualize_input_and_output(self, gif_path="input_output.gif"):
         import matplotlib.animation as animation
 
         connections = [
@@ -134,7 +134,11 @@ class RealTimePrediction():
         ax = fig.add_subplot(111, projection='3d')
         ax.view_init(elev=20, azim=55)
 
-        total_frames = input_motion.shape[0] + output_motion.shape[0]
+
+        input_motion = self.observed_motion
+        output_motion = self.predicted_motion
+
+        total_frames = len(input_motion) + len(output_motion)
 
         def update(frame_idx):
             ax.clear()
@@ -144,20 +148,36 @@ class RealTimePrediction():
             ax.set_xlabel("X")
             ax.set_ylabel("Y")
             ax.set_zlabel("Z")
-            if frame_idx < input_motion.shape[0]:
+            if frame_idx < len(input_motion):
                 ax.set_title(f"Input Motion - Frame: {frame_idx}")
                 joints = input_motion[frame_idx]
                 color = 'r'
+                for connection in connections:
+                    joint1, joint2 = connection
+                    ax.plot([joints[joint1, 0], joints[joint2, 0]],
+                            [joints[joint1, 2], joints[joint2, 2]],
+                            [joints[joint1, 1], joints[joint2, 1]], color, alpha=0.7)
             else:
-                out_idx = frame_idx - input_motion.shape[0]
-                ax.set_title(f"Predicted Motion - Frame: {out_idx}")
-                joints = output_motion[out_idx]
-                color = 'g'
-            for connection in connections:
-                joint1, joint2 = connection
-                ax.plot([joints[joint1, 0], joints[joint2, 0]],
-                        [joints[joint1, 2], joints[joint2, 2]],
-                        [joints[joint1, 1], joints[joint2, 1]], color, alpha=0.7)
+                out_idx = frame_idx - len(input_motion)
+                ax.set_title(f"Predicted vs Ground Truth - Frame: {out_idx}")
+                # Plot predicted output (e.g., green)
+                joints_pred = output_motion[out_idx]
+                for connection in connections:
+                    joint1, joint2 = connection
+                    ax.plot([joints_pred[joint1, 0], joints_pred[joint2, 0]],
+                            [joints_pred[joint1, 2], joints_pred[joint2, 2]],
+                            [joints_pred[joint1, 1], joints_pred[joint2, 1]], 'g', alpha=0.7, label='Prediction' if connection == connections[0] else "")
+                # Plot ground truth (e.g., blue)
+                joints_gt = ground_truth[out_idx]
+                for connection in connections:
+                    joint1, joint2 = connection
+                    ax.plot([joints_gt[joint1, 0], joints_gt[joint2, 0]],
+                            [joints_gt[joint1, 2], joints_gt[joint2, 2]],
+                            [joints_gt[joint1, 1], joints_gt[joint2, 1]], 'b', alpha=0.7, label='Ground Truth' if connection == connections[0] else "")
+                # Add legend only once
+                handles, labels = ax.get_legend_handles_labels()
+                if not handles:
+                    ax.legend(["Prediction", "Ground Truth"])
 
         ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=100)
         ani.save(gif_path, writer='pillow', fps=10)
@@ -197,7 +217,6 @@ class RealTimePrediction():
         offsets = np.arange(timesteps) * 0.03
         offsets = offsets.reshape(-1, 1)  # Reshape to [timesteps, 1]
         self.predicted_motion[:, :, 2] += offsets  # Add offsets to x-coordinates
-
 
     def regress_pred(self, visualize=False, debug=False):
         input_length = self.config.motion.h36m_input_length_dct
@@ -270,7 +289,6 @@ class RealTimePrediction():
         if visualize:
             # self.plot_multiple_skeletons(self.predicted_motion)
             self.visualize_motion(self.predicted_motion, self.ground_truth, title="Predicted Motion")
-            # self.visualize_input_and_output(observed_motion.cpu(), self.predicted_motion)
             # np.save("realtime_predictions.npy", output.cpu())
 
     def evaluate(self):
@@ -310,7 +328,7 @@ state_dict = torch.load(args.model_pth)
 model.load_state_dict(state_dict, strict=True)
 
 
-actions = [ "eating", "smoking", "discussion", "directions",
+actions = ["walking", "eating", "smoking", "discussion", "directions",
                         "greeting", "phoning", "posing", "purchases", "sitting",
                         "sittingdown", "takingphoto", "waiting", "walkingdog",
                         "walkingtogether"]
@@ -329,9 +347,9 @@ with open(log_filename, "w") as log_file:
         mpjpe_upper_all_samples = []
         mpjpe_lower_all_samples = []
 
-        for idx in action_indices:
+        for idx in range(1):
             print("Progress: {}/{}".format(idx+1, len(action_indices)))
-            test_input, test_output = dataset.__getitem__(idx)
+            test_input, test_output = dataset.__getitem__(action_indices[idx])
             full_motion = torch.cat([test_input, test_output], dim=0)
             realtime_predictor = RealTimePrediction(model, config, tau=0.5)  # re-init to clear state
             mpjpe_upper_per_obs = []
@@ -343,6 +361,8 @@ with open(log_filename, "w") as log_file:
                 mpjpe_upper, mpjpe_lower = realtime_predictor.evaluate_upper_and_lower_seperately()  # shape: (4,)
                 mpjpe_upper_per_obs.append(mpjpe_upper)
                 mpjpe_lower_per_obs.append(mpjpe_lower)
+                if i == test_input.shape[0] - 1:
+                    realtime_predictor.visualize_input_and_output(gif_path=f"realtime_{action}_input_output.gif")
             mpjpe_upper_all_samples.append(np.stack(mpjpe_upper_per_obs))  # shape: (obs_len, 4)
             mpjpe_lower_all_samples.append(np.stack(mpjpe_lower_per_obs))  # shape: (obs_len, 4)
 
@@ -352,13 +372,13 @@ with open(log_filename, "w") as log_file:
         mpjpe_upper_mean = np.mean(mpjpe_upper_all_samples, axis=0)  # shape: (obs_len, 4)
         mpjpe_lower_mean = np.mean(mpjpe_lower_all_samples, axis=0)  # shape: (obs_len, 4)
 
-        # Write to log file
-        log_file.write(f"Averaged MPJPE (upper body) for each observation length and each selected timestep: {action}\n")
-        for obs_len in range(mpjpe_upper_mean.shape[0]):
-            log_file.write(f"Obs {obs_len+1}: {mpjpe_upper_mean[obs_len]}\n")
-        log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep: {action}\n")
-        for obs_len in range(mpjpe_lower_mean.shape[0]):
-            log_file.write(f"Obs {obs_len+1}: {mpjpe_lower_mean[obs_len]}\n")
-        log_file.write("\n")
+        # # Write to log file
+        # log_file.write(f"Averaged MPJPE (upper body) for each observation length and each selected timestep: {action}\n")
+        # for obs_len in range(mpjpe_upper_mean.shape[0]):
+        #     log_file.write(f"Obs {obs_len+1}: {mpjpe_upper_mean[obs_len]}\n")
+        # log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep: {action}\n")
+        # for obs_len in range(mpjpe_lower_mean.shape[0]):
+        #     log_file.write(f"Obs {obs_len+1}: {mpjpe_lower_mean[obs_len]}\n")
+        # log_file.write("\n")
 
 print(f"MPJPE logs saved to {log_filename}")
