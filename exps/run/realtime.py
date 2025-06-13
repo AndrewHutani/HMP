@@ -280,6 +280,24 @@ class RealTimePrediction():
         mpjpe = np.mean(np.linalg.norm(self.predicted_motion*1000 - self.ground_truth*1000, axis=2), axis=1)
         selected_timesteps = [1, 9, 14, 24]
         return mpjpe[selected_timesteps]
+    
+    def evaluate_upper_and_lower_seperately(self):
+        """
+        ground_truth: [25, 32, 3] - the ground truth motion
+        """
+        lower_body_indices = np.arange(0, 11).tolist()
+        upper_body_indices = np.arange(11, 32).tolist()
+
+        predicted_upper = self.predicted_motion[:, upper_body_indices] * 1000
+        predicted_lower = self.predicted_motion[:, lower_body_indices] * 1000
+        ground_truth_upper = self.ground_truth[:, upper_body_indices] * 1000
+        ground_truth_lower = self.ground_truth[:, lower_body_indices] * 1000
+
+        mpjpe_upper = np.mean(np.linalg.norm(predicted_upper - ground_truth_upper, axis=2), axis=1)
+        mpjpe_lower = np.mean(np.linalg.norm(predicted_lower - ground_truth_lower, axis=2), axis=1)
+
+        selected_timesteps = [1, 9, 14, 24]
+        return mpjpe_upper[selected_timesteps], mpjpe_lower[selected_timesteps]
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-84000.pth", help='=encoder path')
@@ -292,41 +310,55 @@ state_dict = torch.load(args.model_pth)
 model.load_state_dict(state_dict, strict=True)
 
 
-actions = ["walking", "eating", "smoking", "discussion", "directions",
+actions = [ "eating", "smoking", "discussion", "directions",
                         "greeting", "phoning", "posing", "purchases", "sitting",
                         "sittingdown", "takingphoto", "waiting", "walkingdog",
                         "walkingtogether"]
 
-for action in actions:
-    print(f"Evaluating action: {action}")
-    config.motion.h36m_target_length = config.motion.h36m_target_length_eval
-    dataset = H36MEval(config, 'test')
-    walking_indices = dataset.get_indices_for_action(action)
+log_filename = "mpjpe_log.txt"
+with open(log_filename, "w") as log_file:
+    for action in actions:
+        print(f"Evaluating action: {action}")
+        config.motion.h36m_target_length = config.motion.h36m_target_length_eval
+        dataset = H36MEval(config, 'test')
+        action_indices = dataset.get_indices_for_action(action)
 
-    realtime_predictor = RealTimePrediction(model, config, tau=0.5)
-    visualize = True
-    debug = True
-    mpjpe_all_samples = []
+        realtime_predictor = RealTimePrediction(model, config, tau=0.5)
+        visualize = False
+        debug = False
+        mpjpe_upper_all_samples = []
+        mpjpe_lower_all_samples = []
 
-    for idx in walking_indices[0:4]:
-        print("Progress: {}/{}".format(idx+1, len(walking_indices)))
-        test_input, test_output = dataset.__getitem__(idx)
-        full_motion = torch.cat([test_input, test_output], dim=0)
-        realtime_predictor = RealTimePrediction(model, config, tau=0.5)  # re-init to clear state
-        mpjpe_per_obs = []
-        for i in range(1):
-            test_input_ = test_input
-            ground_truth = full_motion[-25:, :, :]
-            visualize = True
-            debug = False
-            motion_input = realtime_predictor.batch_predict(test_input_, ground_truth, visualize, debug)
-            mpjpe = realtime_predictor.evaluate()  # shape: (4,) for your 4 selected timesteps
-            mpjpe_per_obs.append(mpjpe)
-        mpjpe_all_samples.append(np.stack(mpjpe_per_obs))  # shape: (obs_len, 4)
+        for idx in action_indices:
+            print("Progress: {}/{}".format(idx+1, len(action_indices)))
+            test_input, test_output = dataset.__getitem__(idx)
+            full_motion = torch.cat([test_input, test_output], dim=0)
+            realtime_predictor = RealTimePrediction(model, config, tau=0.5)  # re-init to clear state
+            mpjpe_upper_per_obs = []
+            mpjpe_lower_per_obs = []
+            for i in range(test_input.shape[0]):
+                test_input_ = test_input[-(i+1):]
+                ground_truth = full_motion[-25:, :, :]
+                motion_input = realtime_predictor.batch_predict(test_input_, ground_truth, visualize, debug)
+                mpjpe_upper, mpjpe_lower = realtime_predictor.evaluate_upper_and_lower_seperately()  # shape: (4,)
+                mpjpe_upper_per_obs.append(mpjpe_upper)
+                mpjpe_lower_per_obs.append(mpjpe_lower)
+            mpjpe_upper_all_samples.append(np.stack(mpjpe_upper_per_obs))  # shape: (obs_len, 4)
+            mpjpe_lower_all_samples.append(np.stack(mpjpe_lower_per_obs))  # shape: (obs_len, 4)
 
-    mpjpe_all_samples = np.stack(mpjpe_all_samples)  # shape: (num_samples, obs_len, 4)
-    mpjpe_mean = np.mean(mpjpe_all_samples, axis=0)  # shape: (obs_len, 4)
+        mpjpe_upper_all_samples = np.stack(mpjpe_upper_all_samples)  # shape: (num_samples, obs_len, 4)
+        mpjpe_lower_all_samples = np.stack(mpjpe_lower_all_samples)  # shape: (num_samples, obs_len, 4)
 
-    print("Averaged MPJPE for each observation length and each selected timestep: {}".format(action))
-    for obs_len in range(mpjpe_mean.shape[0]):
-        print(f"Obs {obs_len+1}: {mpjpe_mean[obs_len]}")
+        mpjpe_upper_mean = np.mean(mpjpe_upper_all_samples, axis=0)  # shape: (obs_len, 4)
+        mpjpe_lower_mean = np.mean(mpjpe_lower_all_samples, axis=0)  # shape: (obs_len, 4)
+
+        # Write to log file
+        log_file.write(f"Averaged MPJPE (upper body) for each observation length and each selected timestep: {action}\n")
+        for obs_len in range(mpjpe_upper_mean.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: {mpjpe_upper_mean[obs_len]}\n")
+        log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep: {action}\n")
+        for obs_len in range(mpjpe_lower_mean.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: {mpjpe_lower_mean[obs_len]}\n")
+        log_file.write("\n")
+
+print(f"MPJPE logs saved to {log_filename}")
