@@ -3,9 +3,7 @@ import numpy as np
 import argparse
 from config import config
 
-from utils.misc import rotmat2xyz_torch, rotmat2euler_torch
 from model import GCNext as Model
-from datasets.h36m_eval import H36MEval
 import matplotlib.pyplot as plt
 
 class RealTimePrediction():
@@ -23,9 +21,9 @@ class RealTimePrediction():
         self.joint_equal = np.array([13, 19, 22, 13, 27, 30]).astype(np.int64)
 
 
-        self.observed_motion = []
-        self.predicted_motion = []
-        self.ground_truth = []
+        self.observed_motion = [] # Will be a list of tensors, each tensor is [num_joints, 3]
+        self.predicted_motion = [] # Will be a numpy array of shape [25, 32, 3] after prediction
+        self.ground_truth = [] # Will be a numpy array of shape [25, 32, 3] for evaluation
 
     def visualize_motion(self, motion_sequence, ground_truth = None, title = "Visualized motion"):
         # Define the connections between joints
@@ -78,7 +76,7 @@ class RealTimePrediction():
             plt.pause(0.1)  # Pause to display each frame
         plt.show(block=True)
 
-    def plot_multiple_skeletons(self, motion_sequence, title="Multiple Skeletons"):
+    def plot_multiple_skeletons(self, global_observed_motion, number_of_samples = None, visualize_observed = False, title="Multiple Skeletons"):
         """
         Plots all skeletons from a motion sequence in a single 3D plot.
         Each skeleton corresponds to one frame.
@@ -98,25 +96,70 @@ class RealTimePrediction():
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.set_title(title)
-        ax.set_xlim([-1, 1])
-        ax.set_ylim([-1, 1])
-        ax.set_zlim([-1, 1])
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
 
-        num_frames = motion_sequence.shape[0]
-        colors = cm.viridis(np.linspace(0, 1, num_frames))  # Colormap for time
+        if visualize_observed:
+            observed_motion = torch.stack(global_observed_motion).cpu().numpy()  # Convert to numpy array
 
-        for frame_idx in range(num_frames):
-            joints = motion_sequence[frame_idx]
-            color = colors[frame_idx]
+        # Prepare indices for observed and predicted motions
+        if number_of_samples is not None:
+            # For observed motion
+            if observed_motion is not None:
+                if len(observed_motion) >= number_of_samples:
+                    obs_indices = np.linspace(0, len(observed_motion) - 1, number_of_samples, dtype=int)
+                else:
+                    obs_indices = np.arange(len(observed_motion))
+            else:
+                obs_indices = []
+            
+            # For predicted motion
+            if len(self.predicted_motion) >= number_of_samples:
+                pred_indices = np.linspace(0, len(self.predicted_motion) - 1, number_of_samples, dtype=int)
+            else:
+                pred_indices = np.arange(len(self.predicted_motion))
+        else:
+            obs_indices = np.arange(len(observed_motion)) if observed_motion is not None else []
+            pred_indices = np.arange(len(self.predicted_motion))
+        
+        # Plot observed motion frames (e.g., blue)
+        if observed_motion is not None and len(obs_indices) > 0:
+            obs_colors = cm.Blues(np.linspace(0.5, 1, len(obs_indices)))
+            for i, frame_idx in enumerate(obs_indices):
+                joints = observed_motion[frame_idx]
+                color = obs_colors[i]
+                for connection in connections:
+                    joint1, joint2 = connection
+                    ax.plot([joints[joint1, 0], joints[joint2, 0]],
+                            [joints[joint1, 2], joints[joint2, 2]],
+                            [joints[joint1, 1], joints[joint2, 1]],
+                            color=color, alpha=0.7, linewidth=1.5)
+
+        # Plot predicted motion frames (e.g., orange)
+        pred_colors = cm.Oranges(np.linspace(0.5, 1, len(pred_indices)))
+        for i, frame_idx in enumerate(pred_indices):
+            joints = self.predicted_motion[frame_idx]
+            color = pred_colors[i]
             for connection in connections:
                 joint1, joint2 = connection
                 ax.plot([joints[joint1, 0], joints[joint2, 0]],
                         [joints[joint1, 2], joints[joint2, 2]],
                         [joints[joint1, 1], joints[joint2, 1]],
-                        color=color, alpha=0.7)
+                        color=color, alpha=0.7, linewidth=1.5, linestyle='--')
+                
+        # Dynamically set equal axis scale for all axes
+        all_points = []
+        if observed_motion is not None and len(obs_indices) > 0:
+            all_points.append(observed_motion[obs_indices].reshape(-1, 3))
+        if len(pred_indices) > 0:
+            all_points.append(self.predicted_motion[pred_indices].reshape(-1, 3))
+        if all_points:
+            all_points = np.concatenate(all_points, axis=0)
+            xyz_min = all_points.min(axis=0)
+            xyz_max = all_points.max(axis=0)
+            center = (xyz_max + xyz_min) / 2
+            max_range = (xyz_max - xyz_min).max() / 2
+            ax.set_xlim(center[0] - max_range, center[0] + max_range)
+            ax.set_ylim(center[2] - max_range, center[2] + max_range)
+            ax.set_zlim(center[1] - max_range, center[1] + max_range)
 
         plt.show()
 
@@ -210,13 +253,6 @@ class RealTimePrediction():
         self.ground_truth = ground_truth.cpu().detach().numpy()
         self.regress_pred(visualize, debug)
         return self.observed_motion
-    
-    def add_global_translation(self):
-        timesteps = self.predicted_motion.shape[0]
-
-        offsets = np.arange(timesteps) * 0.03
-        offsets = offsets.reshape(-1, 1)  # Reshape to [timesteps, 1]
-        self.predicted_motion[:, :, 2] += offsets  # Add offsets to x-coordinates
 
     def regress_pred(self, visualize=False, debug=False):
         input_length = self.config.motion.h36m_input_length_dct
@@ -259,7 +295,7 @@ class RealTimePrediction():
                 else:
                     motion_input_ = motion_input
 
-            output = model(motion_input_, self.tau)
+            output = self.model(motion_input_, self.tau)
             output = torch.matmul(idct_m[:, :, :config.motion.h36m_input_length], output)[:, :step, :]
 
             if config.deriv_output:
@@ -316,69 +352,3 @@ class RealTimePrediction():
 
         selected_timesteps = [1, 9, 14, 24]
         return mpjpe_upper[selected_timesteps], mpjpe_lower[selected_timesteps]
-
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-84000.pth", help='=encoder path')
-parser.add_argument('--dyna', nargs='+', type=int, default=[0, 48], help='dynamic layer index')
-args = parser.parse_args()
-
-# Prepare model
-model = Model(config, args.dyna)
-state_dict = torch.load(args.model_pth)
-model.load_state_dict(state_dict, strict=True)
-
-
-actions = ["walking", "eating", "smoking", "discussion", "directions",
-                        "greeting", "phoning", "posing", "purchases", "sitting",
-                        "sittingdown", "takingphoto", "waiting", "walkingdog",
-                        "walkingtogether"]
-
-log_filename = "mpjpe_log.txt"
-with open(log_filename, "w") as log_file:
-    for action in actions:
-        print(f"Evaluating action: {action}")
-        config.motion.h36m_target_length = config.motion.h36m_target_length_eval
-        dataset = H36MEval(config, 'test')
-        action_indices = dataset.get_indices_for_action(action)
-
-        realtime_predictor = RealTimePrediction(model, config, tau=0.5)
-        visualize = False
-        debug = False
-        mpjpe_upper_all_samples = []
-        mpjpe_lower_all_samples = []
-
-        for idx in range(1):
-            print("Progress: {}/{}".format(idx+1, len(action_indices)))
-            test_input, test_output = dataset.__getitem__(action_indices[idx])
-            full_motion = torch.cat([test_input, test_output], dim=0)
-            realtime_predictor = RealTimePrediction(model, config, tau=0.5)  # re-init to clear state
-            mpjpe_upper_per_obs = []
-            mpjpe_lower_per_obs = []
-            for i in range(test_input.shape[0]):
-                test_input_ = test_input[-(i+1):]
-                ground_truth = full_motion[-25:, :, :]
-                motion_input = realtime_predictor.batch_predict(test_input_, ground_truth, visualize, debug)
-                mpjpe_upper, mpjpe_lower = realtime_predictor.evaluate_upper_and_lower_seperately()  # shape: (4,)
-                mpjpe_upper_per_obs.append(mpjpe_upper)
-                mpjpe_lower_per_obs.append(mpjpe_lower)
-                if i == test_input.shape[0] - 1:
-                    realtime_predictor.visualize_input_and_output(gif_path=f"realtime_{action}_input_output.gif")
-            mpjpe_upper_all_samples.append(np.stack(mpjpe_upper_per_obs))  # shape: (obs_len, 4)
-            mpjpe_lower_all_samples.append(np.stack(mpjpe_lower_per_obs))  # shape: (obs_len, 4)
-
-        mpjpe_upper_all_samples = np.stack(mpjpe_upper_all_samples)  # shape: (num_samples, obs_len, 4)
-        mpjpe_lower_all_samples = np.stack(mpjpe_lower_all_samples)  # shape: (num_samples, obs_len, 4)
-
-        mpjpe_upper_mean = np.mean(mpjpe_upper_all_samples, axis=0)  # shape: (obs_len, 4)
-        mpjpe_lower_mean = np.mean(mpjpe_lower_all_samples, axis=0)  # shape: (obs_len, 4)
-
-        # # Write to log file
-        # log_file.write(f"Averaged MPJPE (upper body) for each observation length and each selected timestep: {action}\n")
-        # for obs_len in range(mpjpe_upper_mean.shape[0]):
-        #     log_file.write(f"Obs {obs_len+1}: {mpjpe_upper_mean[obs_len]}\n")
-        # log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep: {action}\n")
-        # for obs_len in range(mpjpe_lower_mean.shape[0]):
-        #     log_file.write(f"Obs {obs_len+1}: {mpjpe_lower_mean[obs_len]}\n")
-        # log_file.write("\n")
-
-print(f"MPJPE logs saved to {log_filename}")
