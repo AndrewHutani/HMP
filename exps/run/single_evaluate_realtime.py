@@ -16,7 +16,7 @@ class RealTimeGlobalPrediction(RealTimePrediction):
         CONSTANT_VELOCITY = 0.03  # Adjust this value as needed
         
         # observed_motion: list of torch tensors, each [num_joints, 3]
-        offsets = torch.arange(len(self.observed_motion), dtype=self.observed_motion[0].dtype, device=self.observed_motion[0].device) * 0.03
+        offsets = torch.arange(len(self.observed_motion), dtype=self.observed_motion[0].dtype, device=self.observed_motion[0].device) * CONSTANT_VELOCITY
         global_observed_motion = []
         for i in range(len(self.observed_motion)):
             frame = self.observed_motion[i].clone()  # Clone to avoid modifying the original
