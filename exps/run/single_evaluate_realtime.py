@@ -61,7 +61,7 @@ realtime_predictor = RealTimeGlobalPrediction(model, config, tau=0.5)
 visualize = False
 debug = False
 
-test_input, test_output = dataset.__getitem__(action_indices[0])
+test_input, test_output = dataset.__getitem__(action_indices[34])
 full_motion = torch.cat([test_input, test_output], dim=0)
 
 all_observed_motion = []

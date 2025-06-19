@@ -21,11 +21,17 @@ class RealTimePrediction():
         self.joint_used_xyz = np.array([2,3,4,5,7,8,9,10,12,13,14,15,17,18,19,21,22,25,26,27,29,30]).astype(np.int64)
         self.joint_to_ignore = np.array([16, 20, 23, 24, 28, 31]).astype(np.int64)
         self.joint_equal = np.array([13, 19, 22, 13, 27, 30]).astype(np.int64)
+        
+        dct_m, idct_m = self.get_dct_matrix(config.motion.h36m_input_length_dct)
+        self.dct_m = dct_m.unsqueeze(0)
+        self.idct_m = idct_m.unsqueeze(0)
+
+        self.total_prediction_horizon = 50
 
 
         self.observed_motion = [] # Will be a list of tensors, each tensor is [num_joints, 3]
-        self.predicted_motion = [] # Will be a numpy array of shape [25, 32, 3] after prediction
-        self.ground_truth = [] # Will be a numpy array of shape [25, 32, 3] for evaluation
+        self.predicted_motion = [] # Will be a numpy array of shape [self.total_prediction_horizon, 32, 3] after prediction
+        self.ground_truth = [] # Will be a numpy array of shape [self.total_prediction_horizon, 32, 3] for evaluation
 
     def visualize_motion(self, motion_sequence, ground_truth = None, title = "Visualized motion"):
         # Define the connections between joints
@@ -259,7 +265,6 @@ class RealTimePrediction():
     def regress_pred(self, visualize=False, debug=False):
         t0 = time.time()
         input_length = self.config.motion.h36m_input_length_dct
-        target_length = self.config.motion.h36m_target_length_train
         if debug:
             print("Stacked observed motion shape:", torch.stack(self.observed_motion).shape)
         observed_motion = torch.stack(self.observed_motion).cuda()
@@ -275,49 +280,41 @@ class RealTimePrediction():
         else:
             motion_window = observed_motion[:input_length].clone()
 
-
-        dct_m, idct_m = self.get_dct_matrix(config.motion.h36m_input_length_dct)
-        dct_m = dct_m.unsqueeze(0)
-        idct_m = idct_m.unsqueeze(0)
-        if debug:
-            print("dct_m shape:", dct_m.shape)
-            print("idct_m shape:", idct_m.shape)
-
         outputs = []
-        step = config.motion.h36m_target_length_train
-        if step == 25:
-            num_step = 1
+        chunk_prediction_length = config.motion.h36m_target_length_train
+        if chunk_prediction_length == self.total_prediction_horizon:
+            num_prediction_chunks = 1
         else:
-            num_step = 25 // step + 1
+            num_prediction_chunks = self.total_prediction_horizon // chunk_prediction_length + 1
         
-        for idx in range(num_step):
+        for idx in range(num_prediction_chunks):
             motion_input = motion_window[:, self.joint_used_xyz, :].reshape(1, input_length, -1)
             with torch.no_grad():
                 if config.deriv_input:
-                    motion_input_ = torch.matmul(dct_m[:, :input_length, :], motion_input)
+                    motion_input_ = torch.matmul(self.dct_m[:, :input_length, :], motion_input)
                 else:
                     motion_input_ = motion_input
 
             output = self.model(motion_input_, self.tau)
-            output = torch.matmul(idct_m[:, :, :config.motion.h36m_input_length], output)[:, :step, :]
+            output = torch.matmul(self.idct_m[:, :, :config.motion.h36m_input_length], output)[:, :chunk_prediction_length, :]
 
             if config.deriv_output:
-                output = output + motion_input[:, -1:, :].repeat(1,step,1)
+                output = output + motion_input[:, -1:, :].repeat(1,chunk_prediction_length,1)
 
-            output = output.reshape(step, -1, 3)  # [step, 22, 3]
+            output = output.reshape(chunk_prediction_length, -1, 3)  # [prediction_horizon, 22, 3]
 
             # Fill in the predicted joints into a full skeleton
-            motion_pred = motion_window[-1].unsqueeze(0).repeat(step, 1, 1)
+            motion_pred = motion_window[-1].unsqueeze(0).repeat(chunk_prediction_length, 1, 1)
             motion_pred[:, self.joint_used_xyz, :] = output
             motion_pred[:, self.joint_to_ignore, :] = motion_pred[:, self.joint_equal, :]
 
             outputs.append(motion_pred)
 
             # Slide the window: remove first 'step' frames, append new predictions
-            motion_window = torch.cat([motion_window[step:], motion_pred], dim=0)
+            motion_window = torch.cat([motion_window[chunk_prediction_length:], motion_pred], dim=0)
 
         # Concatenate all predictions
-        predictions = torch.cat(outputs, dim=0)[:25]  # [target_length, 32, 3]
+        predictions = torch.cat(outputs, dim=0)[:self.total_prediction_horizon]  # [target_length, 32, 3]
 
         self.predicted_motion = predictions.cpu().detach().numpy()
         # self.add_global_translation()
@@ -336,7 +333,7 @@ class RealTimePrediction():
 
     def evaluate(self):
         """
-        ground_truth: [25, 32, 3] - the ground truth motion
+        ground_truth: [self.total_prediction_horizon, 32, 3] - the ground truth motion
         """
         mpjpe = np.mean(np.linalg.norm(self.predicted_motion*1000 - self.ground_truth*1000, axis=2), axis=1)
         selected_timesteps = [1, 9, 14, 24]
@@ -344,7 +341,7 @@ class RealTimePrediction():
     
     def evaluate_upper_and_lower_seperately(self):
         """
-        ground_truth: [25, 32, 3] - the ground truth motion
+        ground_truth: [self.total_prediction_horizon, 32, 3] - the ground truth motion
         """
         lower_body_indices = np.arange(0, 11).tolist()
         upper_body_indices = np.arange(11, 32).tolist()
