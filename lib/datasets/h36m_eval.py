@@ -24,6 +24,7 @@ class H36MEval(data.Dataset):
         self.motion_dim = config.motion.dim
         self.shift_step = config.shift_step
         self.seq_to_action = []
+        self.root_translations = []
         self._h36m_files = self._get_h36m_files()
         self._file_length = len(self.data_idx)
 
@@ -49,13 +50,16 @@ class H36MEval(data.Dataset):
             for act in self._actions:
                 filename0 = '{0}/{1}/{2}_{3}.txt'.format(self._h36m_anno_dir, subject, act, 1)
                 filename1 = '{0}/{1}/{2}_{3}.txt'.format(self._h36m_anno_dir, subject, act, 2)
-                poses0 = self._preprocess(filename0)
-                poses1 = self._preprocess(filename1)
+                poses0, root0 = self._preprocess(filename0)
+                poses1, root1 = self._preprocess(filename1)
 
                 self.h36m_seqs.append(poses0)
                 self.seq_to_action.append(act)  # Track action for poses0
+                self.root_translations.append(root0)
+
                 self.h36m_seqs.append(poses1)
                 self.seq_to_action.append(act)  # Track action for poses1
+                self.root_translations.append(root1)
 
                 num_frames0 = poses0.shape[0]
                 num_frames1 = poses1.shape[0]
@@ -108,7 +112,7 @@ class H36MEval(data.Dataset):
 
         T = h36m_motion_poses.shape[0]
         h36m_motion_poses = h36m_motion_poses.reshape(T, 32, 3)
-        return h36m_motion_poses
+        return h36m_motion_poses, root_translation[sampled_index]
     
     def get_indices_for_action(self, action_name):
         return [i for i, (seq_idx, _) in enumerate(self.data_idx) if self.seq_to_action[seq_idx] == action_name]
@@ -140,4 +144,7 @@ class H36MEval(data.Dataset):
             List[torch.Tensor]: Each tensor is [num_frames, 32, 3] for one sequence
         """
         seq_indices = [i for i, act in enumerate(self.seq_to_action) if act == action_name]
-        return [self.h36m_seqs[i]/1000. for i in seq_indices]
+        return [
+            (self.h36m_seqs[i] / 1000., self.root_translations[i])
+            for i in seq_indices
+        ]
