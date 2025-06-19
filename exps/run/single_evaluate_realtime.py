@@ -55,25 +55,24 @@ action = "walking"  # Change this to the action you want to evaluate
 
 config.motion.h36m_target_length = config.motion.h36m_target_length_eval
 dataset = H36MEval(config, 'test')
-action_indices = dataset.get_indices_for_action(action)
+walking_sample = dataset.get_full_sequences_for_action(action)[0]
 
 realtime_predictor = RealTimeGlobalPrediction(model, config, tau=0.5)
 visualize = False
 debug = False
 
-test_input, test_output = dataset.__getitem__(action_indices[34])
-full_motion = torch.cat([test_input, test_output], dim=0)
 
 all_observed_motion = []
 all_predicted_motion = []
 
-for i in range(test_input.shape[0]):
-    test_input_ = test_input[i]
-    ground_truth = full_motion[i:i+config.motion.h36m_target_length]
+# for i in range(walking_sample.shape[0] - config.motion.h36m_target_length):
+for i in range(100):
+    test_input_ = walking_sample[i]
+    ground_truth = walking_sample[i:i+config.motion.h36m_target_length]
     realtime_predictor.predict(test_input_, ground_truth, visualize, debug)
     global_observed_motion = realtime_predictor.add_global_translation()  # Add global translation to the predicted motion
 
-    all_observed_motion.append(global_observed_motion)
+    all_observed_motion.append(global_observed_motion[-config.motion.h36m_target_length:])
     all_predicted_motion.append(realtime_predictor.predicted_motion)
 
 fig = plt.figure(figsize=(16, 9))
@@ -84,16 +83,17 @@ xyz_min = all_points.min(axis=(0, 1, 2))  # shape: (3,)
 xyz_max = all_points.max(axis=(0, 1, 2))  # shape: (3,)
 center = (xyz_max + xyz_min) / 2
 max_range = (xyz_max - xyz_min).max() / 2
-
+max_range = 1.5
 
 
 def update(frame_idx):
+    num_skeletons = 3
     ax.clear()
     ax.set_title(f"Time step {frame_idx}")
     ax.view_init(elev=30, azim=-30)  # <-- Set your desired viewing angle here
     # Plot observed
     observed_motion = all_observed_motion[frame_idx]
-    obs_indices = np.linspace(0, len(observed_motion) - 1, 4, dtype=int)
+    obs_indices = np.linspace(0, len(observed_motion) - 1, num_skeletons, dtype=int)
     obs_colors = cm.Blues(np.linspace(0.5, 1, len(obs_indices)))
     connections = [
         (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
@@ -113,7 +113,7 @@ def update(frame_idx):
                     color=color, alpha=0.7, linewidth=1.5)
     # Plot predicted
     predicted_motion = all_predicted_motion[frame_idx]
-    pred_indices = np.linspace(0, len(predicted_motion) - 1, 4, dtype=int)
+    pred_indices = np.linspace(0, len(predicted_motion) - 1, num_skeletons, dtype=int)
     pred_colors = cm.Oranges(np.linspace(0.5, 1, len(pred_indices)))
     for i, frame_idx_pred in enumerate(pred_indices):
         joints = predicted_motion[frame_idx_pred]
@@ -124,7 +124,13 @@ def update(frame_idx):
                     [joints[joint1, 2], joints[joint2, 2]],
                     [joints[joint1, 1], joints[joint2, 1]],
                     color=color, alpha=0.7, linewidth=1.5, linestyle='--')
-    # Set axis limits (optional: you can compute these globally for all frames)
+            
+    # Compute center for current frame
+    observed_motion = all_observed_motion[frame_idx]
+    predicted_motion = all_predicted_motion[frame_idx]
+    frame_points = np.concatenate([np.stack(observed_motion), predicted_motion], axis=0)
+    center = (frame_points.max(axis=(0, 1)) + frame_points.min(axis=(0, 1))) / 2
+
     ax.set_xlim(center[0] - max_range, center[0] + max_range)
     ax.set_ylim(center[2] - max_range, center[2] + max_range)
     ax.set_zlim(center[1] - max_range, center[1] + max_range)

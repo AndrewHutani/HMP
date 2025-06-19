@@ -26,7 +26,7 @@ class RealTimePrediction():
         self.dct_m = dct_m.unsqueeze(0)
         self.idct_m = idct_m.unsqueeze(0)
 
-        self.total_prediction_horizon = 50
+        self.total_prediction_horizon = 25
 
 
         self.observed_motion = [] # Will be a list of tensors, each tensor is [num_joints, 3]
@@ -278,7 +278,9 @@ class RealTimePrediction():
             pad = observed_motion[0:1].repeat(input_length - observed_motion.shape[0], 1, 1)
             motion_window = torch.cat([pad, observed_motion], dim=0)
         else:
-            motion_window = observed_motion[:input_length].clone()
+            # Use the last input_length frames
+            motion_window = observed_motion[-input_length:].clone()
+        
 
         outputs = []
         chunk_prediction_length = config.motion.h36m_target_length_train
@@ -329,7 +331,7 @@ class RealTimePrediction():
         
         t1 = time.time()
         # if debug:
-        print(f"Prediction time: {t1 - t0:.2f} seconds")
+        # print(f"Prediction time: {t1 - t0:.2f} seconds")
 
     def evaluate(self):
         """

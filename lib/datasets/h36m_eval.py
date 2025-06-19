@@ -113,25 +113,6 @@ class H36MEval(data.Dataset):
     def get_indices_for_action(self, action_name):
         return [i for i, (seq_idx, _) in enumerate(self.data_idx) if self.seq_to_action[seq_idx] == action_name]
 
-    # def _preprocess(self, filename):
-    #     """
-    #     Load the motion file and return it as a tensor without preprocessing.
-    #     """
-    #     info = open(filename, 'r').readlines()
-    #     pose_info = []
-    #     for line in info:
-    #         line = line.strip().split(',')
-    #         if len(line) > 0:
-    #             pose_info.append(np.array([float(x) for x in line]))
-    #     pose_info = np.array(pose_info)
-        
-    #     # Reshape to match the original structure: [num_frames, num_joints, 3]
-    #     pose_info = pose_info.reshape(-1, 33, 3)
-        
-    #     # Convert to a PyTorch tensor
-    #     pose_info = torch.tensor(pose_info).float()
-        
-    #     return pose_info
     
     def __getitem__(self, index):
         """
@@ -140,6 +121,7 @@ class H36MEval(data.Dataset):
         """
         idx, start_frame = self.data_idx[index]
         frame_indexes = np.arange(start_frame, start_frame + self.h36m_motion_input_length + self.h36m_motion_target_length)
+        print("self.h36m_seqs.shape: ", len(self.h36m_seqs))
         motion = self.h36m_seqs[idx][frame_indexes]
 
         h36m_motion_input = motion[:self.h36m_motion_input_length] / 1000.
@@ -149,3 +131,13 @@ class H36MEval(data.Dataset):
         h36m_motion_target = h36m_motion_target.float()
         return h36m_motion_input, h36m_motion_target
 
+    def get_full_sequences_for_action(self, action_name):
+        """
+        Returns a list of all full motion sequences for the given action name.
+        Args:
+            action_name (str): Name of the action (e.g., "walking")
+        Returns:
+            List[torch.Tensor]: Each tensor is [num_frames, 32, 3] for one sequence
+        """
+        seq_indices = [i for i, act in enumerate(self.seq_to_action) if act == action_name]
+        return [self.h36m_seqs[i]/1000. for i in seq_indices]
