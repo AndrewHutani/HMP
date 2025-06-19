@@ -6,6 +6,8 @@ from config import config
 from model import GCNext as Model
 import matplotlib.pyplot as plt
 
+import time
+
 class RealTimePrediction():
     def __init__(self, model, config, tau):
         self.config = config
@@ -255,6 +257,7 @@ class RealTimePrediction():
         return self.observed_motion
 
     def regress_pred(self, visualize=False, debug=False):
+        t0 = time.time()
         input_length = self.config.motion.h36m_input_length_dct
         target_length = self.config.motion.h36m_target_length_train
         if debug:
@@ -326,6 +329,10 @@ class RealTimePrediction():
             # self.plot_multiple_skeletons(self.predicted_motion)
             self.visualize_motion(self.predicted_motion, self.ground_truth, title="Predicted Motion")
             # np.save("realtime_predictions.npy", output.cpu())
+        
+        t1 = time.time()
+        # if debug:
+        print(f"Prediction time: {t1 - t0:.2f} seconds")
 
     def evaluate(self):
         """
