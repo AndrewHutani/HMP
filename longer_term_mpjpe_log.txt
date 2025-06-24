@@ -1,0 +1,45 @@
+Averaged MPJPE (upper body) for walking: [ 9.322581 40.858204 51.678574 59.139412 77.75401 ]
+Averaged MPJPE (lower body) for walking: [11.065109 33.912262 38.895332 45.382294 73.89467 ]
+
+Averaged MPJPE (upper body) for eating: [  7.026964  45.776817  65.895874  94.92056  127.92366 ]
+Averaged MPJPE (lower body) for eating: [ 5.406498 20.801514 26.694744 35.327557 61.000465]
+
+Averaged MPJPE (upper body) for smoking: [  6.4311323  38.057194   54.291313   77.861305  117.62341  ]
+Averaged MPJPE (lower body) for smoking: [ 6.2813296 29.298712  38.852257  51.432037  74.60893  ]
+
+Averaged MPJPE (upper body) for discussion: [ 10.787291  82.12267  110.68613  140.71649  169.88684 ]
+Averaged MPJPE (lower body) for discussion: [  8.06623   46.558308  63.53225   86.268295 105.09024 ]
+
+Averaged MPJPE (upper body) for directions: [  7.7885094  67.12069    95.490524  132.97458   173.14981  ]
+Averaged MPJPE (lower body) for directions: [ 5.4979744 34.41429   48.305832  64.35021   82.13934  ]
+
+Averaged MPJPE (upper body) for greeting: [ 13.648069  91.5054   120.15091  152.89658  167.8291  ]
+Averaged MPJPE (lower body) for greeting: [ 10.636113  63.78814   86.11483  106.340996 111.88448 ]
+
+Averaged MPJPE (upper body) for phoning: [  8.654322  56.04368   80.331955 118.19609  182.61624 ]
+Averaged MPJPE (lower body) for phoning: [ 7.7063036 37.07115   49.74803   68.02435   99.74921  ]
+
+Averaged MPJPE (upper body) for posing: [ 10.427782  87.44675  125.96798  175.1677   240.20041 ]
+Averaged MPJPE (lower body) for posing: [  9.428962  66.79529   97.98716  146.09978  193.64253 ]
+
+Averaged MPJPE (upper body) for purchases: [ 13.8643265  88.59308   119.9292    162.151     203.30658  ]
+Averaged MPJPE (lower body) for purchases: [  8.747775  49.76622   66.877304  86.91635  106.71806 ]
+
+Averaged MPJPE (upper body) for sitting: [  8.899126  58.446785  85.358536 126.0741   197.87254 ]
+Averaged MPJPE (lower body) for sitting: [  8.329769  49.187416  71.01304  102.08356  150.00525 ]
+
+Averaged MPJPE (upper body) for sittingdown: [ 14.60549   77.64527  111.146484 163.16763  247.55136 ]
+Averaged MPJPE (lower body) for sittingdown: [ 13.019617  61.718254  86.465744 125.06137  189.74365 ]
+
+Averaged MPJPE (upper body) for takingphoto: [  8.310665  55.670067  81.98735  124.958534 210.67302 ]
+Averaged MPJPE (lower body) for takingphoto: [  8.644571  53.909332  77.19537  112.12807  162.67427 ]
+
+Averaged MPJPE (upper body) for waiting: [  8.841215  60.242188  85.0311   116.00546  170.23648 ]
+Averaged MPJPE (lower body) for waiting: [  8.369091  48.26626   66.10573   91.490295 130.69568 ]
+
+Averaged MPJPE (upper body) for walkingdog: [ 19.296413 101.08066  127.65665  166.62933  229.93268 ]
+Averaged MPJPE (lower body) for walkingdog: [ 17.944561  70.19106   85.08087  100.21149  130.92685 ]
+
+Averaged MPJPE (upper body) for walkingtogether: [ 8.118922 43.41143  55.03397  65.23422  82.90316 ]
+Averaged MPJPE (lower body) for walkingtogether: [ 9.676441 34.87316  42.68207  52.739098 76.81098 ]
+

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import time
 
 class RealTimePrediction():
-    def __init__(self, model, config, tau):
+    def __init__(self, model, config, tau, total_prediction_horizon = 25):
         self.config = config
         self.tau = tau
 
@@ -26,7 +26,7 @@ class RealTimePrediction():
         self.dct_m = dct_m.unsqueeze(0)
         self.idct_m = idct_m.unsqueeze(0)
 
-        self.total_prediction_horizon = 25
+        self.total_prediction_horizon = total_prediction_horizon
 
 
         self.observed_motion = [] # Will be a list of tensors, each tensor is [num_joints, 3]
@@ -356,5 +356,5 @@ class RealTimePrediction():
         mpjpe_upper = np.mean(np.linalg.norm(predicted_upper - ground_truth_upper, axis=2), axis=1)
         mpjpe_lower = np.mean(np.linalg.norm(predicted_lower - ground_truth_lower, axis=2), axis=1)
 
-        selected_timesteps = [1, 9, 14, 24]
+        selected_timesteps = [1, 9, 14, 24, -1]
         return mpjpe_upper[selected_timesteps], mpjpe_lower[selected_timesteps]
