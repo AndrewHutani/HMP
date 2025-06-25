@@ -125,7 +125,6 @@ class H36MEval(data.Dataset):
         """
         idx, start_frame = self.data_idx[index]
         frame_indexes = np.arange(start_frame, start_frame + self.h36m_motion_input_length + self.h36m_motion_target_length)
-        print("self.h36m_seqs.shape: ", len(self.h36m_seqs))
         motion = self.h36m_seqs[idx][frame_indexes]
 
         h36m_motion_input = motion[:self.h36m_motion_input_length] / 1000.

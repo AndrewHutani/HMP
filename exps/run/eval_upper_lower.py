@@ -28,8 +28,8 @@ def parse_action_data(filename, body_part):
                     action_data[current_action].append([float(x) for x in arr[0].split()])
     return action_data
 
-upper_data = parse_action_data("mpjpe_log.txt", "upper body")
-lower_data = parse_action_data("mpjpe_log.txt", "lower body")
+upper_data = parse_action_data("longer_term_mpjpe_log.txt", "upper body")
+lower_data = parse_action_data("longer_term_mpjpe_log.txt", "lower body")
 
 # Aggregate by group
 def group_average(actions, action_data):
@@ -42,8 +42,8 @@ def group_average(actions, action_data):
     else:
         return None
 
-dynamic_avg = group_average(dynamic_actions, lower_data)
-static_avg = group_average(static_actions, lower_data)
+dynamic_avg = group_average(dynamic_actions, upper_data)
+static_avg = group_average(static_actions, upper_data)
 # lower_avg = group_average(dynamic_actions, lower_data)
 
 # Compute relative MPJPE (percentage of first observation)
@@ -56,18 +56,20 @@ static_rel = relative_mpjpe(static_avg)
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 
 plt.figure(figsize=(10,6))
-for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
+for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms", "2000ms", "4000ms"]):
     plt.plot(static_avg[:, i], label=f"{label} (Static)", color=colors[i], linestyle='-')
     plt.plot(dynamic_avg[:, i], label=f"{label} (Dynamic)", color=colors[i], linestyle='--')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Absolute MPJPE (mm)")
-plt.title("Absolute MPJPE for lower body vs. Observed Frames\n Dynamic vs Static Actions")
+plt.title("Absolute MPJPE for upper body vs. Observed Frames\n Dynamic vs Static Actions")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
 second_line = Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms')
 third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms')
 fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
+fifth_line = Line2D([], [], color=colors[4], linestyle='--', linewidth=1.5, label='2000ms')
+sixth_line = Line2D([], [], color=colors[5], linestyle='--', linewidth=1.5, label='4000ms')
 
 # Second legend
 line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Static Actions")
@@ -83,11 +85,11 @@ line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label
 #                            title='Line types')
 # Combine all handles and labels into one legend
 all_handles = [
-    first_line, second_line, third_line, fourth_line,  # Timesteps/colors
+    first_line, second_line, third_line, fourth_line, fifth_line, sixth_line,  # Timesteps/colors
     line_solid, line_dashed                           # Line types
 ]
 all_labels = [
-    '80ms', '400ms', '560ms', '1000ms',               # Timesteps/colors
+    '80ms', '400ms', '560ms', '1000ms', '2000ms', '4000ms',            # Timesteps/colors
     'Static Actions', 'Dynamic Actions'               # Line types
 ]
 

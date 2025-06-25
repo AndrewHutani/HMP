@@ -25,12 +25,14 @@ actions = ["walking", "eating", "smoking", "discussion", "directions",
                         "sittingdown", "takingphoto", "waiting", "walkingdog",
                         "walkingtogether"]
 
-log_filename = "mpjpe_log.txt"
+
+config.motion.h36m_target_length = 100
+dataset = H36MEval(config, 'test')
+log_filename = "longer_term_mpjpe_log.txt"
 with open(log_filename, "w") as log_file:
     for action in actions:
         print(f"Evaluating action: {action}")
-        config.motion.h36m_target_length = config.motion.h36m_target_length_eval
-        dataset = H36MEval(config, 'test')
+        
         action_indices = dataset.get_indices_for_action(action)
 
         realtime_predictor = RealTimePrediction(model, config, tau=0.5)
@@ -48,29 +50,29 @@ with open(log_filename, "w") as log_file:
             mpjpe_lower_per_obs = []
             for i in range(test_input.shape[0]):
                 test_input_ = test_input[-(i+1):]
-                ground_truth = full_motion[-25:, :, :]
+                ground_truth = test_output
                 motion_input = realtime_predictor.batch_predict(test_input_, ground_truth, visualize, debug)
                 mpjpe_upper, mpjpe_lower = realtime_predictor.evaluate_upper_and_lower_seperately()  # shape: (4,)
                 mpjpe_upper_per_obs.append(mpjpe_upper)
                 mpjpe_lower_per_obs.append(mpjpe_lower)
                 # if i == test_input.shape[0] - 1:
                 #     realtime_predictor.visualize_input_and_output(gif_path=f"realtime_{action}_input_output.gif")
-            mpjpe_upper_all_samples.append(np.stack(mpjpe_upper_per_obs))  # shape: (obs_len, 4)
-            mpjpe_lower_all_samples.append(np.stack(mpjpe_lower_per_obs))  # shape: (obs_len, 4)
+            mpjpe_upper_all_samples.append(np.stack(mpjpe_upper_per_obs))  # shape: (obs_len, 6)
+            mpjpe_lower_all_samples.append(np.stack(mpjpe_lower_per_obs))  # shape: (obs_len, 6)
 
-        mpjpe_upper_all_samples = np.stack(mpjpe_upper_all_samples)  # shape: (num_samples, obs_len, 4)
-        mpjpe_lower_all_samples = np.stack(mpjpe_lower_all_samples)  # shape: (num_samples, obs_len, 4)
+        mpjpe_upper_all_samples = np.stack(mpjpe_upper_all_samples)  # shape: (num_samples, obs_len, 6)
+        mpjpe_lower_all_samples = np.stack(mpjpe_lower_all_samples)  # shape: (num_samples, obs_len, 6)
 
-        mpjpe_upper_mean = np.mean(mpjpe_upper_all_samples, axis=0)  # shape: (obs_len, 4)
-        mpjpe_lower_mean = np.mean(mpjpe_lower_all_samples, axis=0)  # shape: (obs_len, 4)
+        mpjpe_upper_mean = np.mean(mpjpe_upper_all_samples, axis=0)  # shape: (obs_len, 6)
+        mpjpe_lower_mean = np.mean(mpjpe_lower_all_samples, axis=0)  # shape: (obs_len, 6)
 
-        # # Write to log file
-        # log_file.write(f"Averaged MPJPE (upper body) for each observation length and each selected timestep: {action}\n")
-        # for obs_len in range(mpjpe_upper_mean.shape[0]):
-        #     log_file.write(f"Obs {obs_len+1}: {mpjpe_upper_mean[obs_len]}\n")
-        # log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep: {action}\n")
-        # for obs_len in range(mpjpe_lower_mean.shape[0]):
-        #     log_file.write(f"Obs {obs_len+1}: {mpjpe_lower_mean[obs_len]}\n")
-        # log_file.write("\n")
+        # Write to log file
+        log_file.write(f"Averaged MPJPE (upper body) for each observation length and each selected timestep: {action}\n")
+        for obs_len in range(mpjpe_upper_mean.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: {mpjpe_upper_mean[obs_len]}\n")
+        log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep: {action}\n")
+        for obs_len in range(mpjpe_lower_mean.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: {mpjpe_lower_mean[obs_len]}\n")
+        log_file.write("\n")
 
 print(f"MPJPE logs saved to {log_filename}")
