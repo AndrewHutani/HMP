@@ -42,8 +42,8 @@ def group_average(actions, action_data):
     else:
         return None
 
-dynamic_avg = group_average(dynamic_actions, upper_data)
-static_avg = group_average(static_actions, upper_data)
+dynamic_avg = group_average(dynamic_actions, lower_data)
+static_avg = group_average(static_actions, lower_data)
 # lower_avg = group_average(dynamic_actions, lower_data)
 
 # Compute relative MPJPE (percentage of first observation)
@@ -61,15 +61,15 @@ for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms", "2000ms", "4000ms
     plt.plot(dynamic_avg[:, i], label=f"{label} (Dynamic)", color=colors[i], linestyle='--')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Absolute MPJPE (mm)")
-plt.title("Absolute MPJPE for upper body vs. Observed Frames\n Dynamic vs Static Actions")
+plt.title("Absolute MPJPE for lower body vs. Observed Frames\n Dynamic vs Static Actions")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
 second_line = Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms')
 third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms')
 fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
-fifth_line = Line2D([], [], color=colors[4], linestyle='--', linewidth=1.5, label='2000ms')
-sixth_line = Line2D([], [], color=colors[5], linestyle='--', linewidth=1.5, label='4000ms')
+fifth_line = Line2D([], [], color=colors[4], linestyle='-', linewidth=1.5, label='2000ms')
+sixth_line = Line2D([], [], color=colors[5], linestyle='-', linewidth=1.5, label='4000ms')
 
 # Second legend
 line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Static Actions")
