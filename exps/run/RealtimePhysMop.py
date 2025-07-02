@@ -3,25 +3,76 @@ import torch.nn as nn
 
 import numpy as np 
 
-from PhysMoP import PhysMoP
+from models.PhysMoP import PhysMoP
+from models.humanmodel import SMPL, SMPLH
+
 import utils.config as config
-from utils.utils import remove_singlular_batch, smoothness_constraint, batch_roteulerSMPL
+from utils.utils import remove_singlular_batch, smoothness_constraint, batch_roteulerSMPL, compute_errors, compute_error_accel_T
 
 import utils.constants as constants
+from dataclasses import dataclass
+
+from visualize_motion import visualize_continuous_motion
+
+@dataclass
+class BatchInfo:
+    process_size_test: int
+    test_batchsize: int
+    gt_shape: torch.Tensor
+    gt_gender_id: torch.Tensor
+    gt_joints: torch.Tensor
+    gt_joints_smpl: torch.Tensor
 
 
 class RealtimePhysMop:
-    def __init__(self, checkpoint_path,):
+    def __init__(self, checkpoint_path, device='auto'):
+        self.set_device(device)
+             
+        self.smpl = SMPL(device=self.device)
+        self.smplh_m = SMPLH(gender='male', device=self.device)
+        self.smplh_f = SMPLH(gender='female', device=self.device)
+
         self.model = PhysMoP(hist_length=config.hist_length,
                                        physics=True,
-                                       data=True,
+                                       data=False,
                                        fusion=True
                                        ).to(self.device)
         checkpoint = torch.load(checkpoint_path)
         self.model.load_state_dict(checkpoint['model'], strict=True)
         self.model.eval()
 
+        self.observed_motion = []
+        self.predicted_motion = []
+        self.ground_truth = [] 
+
+    def set_device(self, device):
+        # Device selection with availability checking
+        if device == 'auto':
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        elif device == 'cuda':
+            if not torch.cuda.is_available():
+                raise RuntimeError("CUDA device requested but CUDA is not available on this system")
+            self.device = torch.device('cuda')
+        elif device == 'mps':
+            if not torch.backends.mps.is_available():
+                raise RuntimeError("MPS device requested but MPS is not available on this system")
+            self.device = torch.device('mps')
+        elif device == 'cpu':
+            self.device = torch.device('cpu')
+        else:
+            raise ValueError(f"Invalid device '{device}'. Valid options are: 'auto', 'cuda', 'mps', 'cpu'")
+        
+        print(f"Using device: {self.device}")
+
+
     def predict(self, data_test):
+        """
+        data_test: dict
+            Contains the following keys:
+            - 'q': Tensor of shape (Batch size, Frames = 50, 3) representing the joint angles
+            - 'shape': Tensor of shape (Batch size, Frames, 10) representing SMPL shape parameters (?)
+            - gender_id: Tensor of shape (Batch size, Frames) representing which gender to use
+        """
         # Data Format Conversion & Extraction
         gt_q = data_test['q'].type(torch.float32)
         test_batchsize = gt_q.shape[0]
@@ -44,13 +95,24 @@ class RealtimePhysMop:
 
         #SMPL Pose Parameter Conversion + Forward Kinematics
         gt_pose = torch.zeros([test_batchsize, config.total_length, 72]).type(torch.float32).to(self.device)
-        gt_pose[:, :, constants.G2Hpose_idx] = gt_q[:,:,3:]  # Map 60 dims to 72 SMPL dims
+        gt_pose[:, :, constants.G2Hpose_idx] = gt_q[:,:,3:].to(self.device)  # Map 60 dims to 72 SMPL dims
+        gt_pose = gt_pose.view(process_size_test, 72)
+        
+        # Send all tensors to device
+        gt_q = gt_q.to(self.device)
+        gt_q_ddot = gt_q_ddot.to(self.device)
+        gt_shape = gt_shape.to(self.device)
+        gt_gender_id = gt_gender_id.to(self.device)
+        gt_pose = gt_pose.to(self.device)
 
         gt_vertices, gt_joints, gt_joints_smpl, gt_rotMat_individual = self.forward_kinematics(gt_pose, gt_shape, gt_gender_id, process_size_test, joints_smpl=True, vertices=True)
+        batch_info = BatchInfo(process_size_test, test_batchsize, gt_shape, gt_gender_id, gt_joints, gt_joints_smpl)
         gt_vertices_norm, gt_M_inv, gt_JcT = None, None, None
 
+        # Predict future joint angle data
         model_output = self.model.forward_dynamics(gt_vertices_norm, gt_q, gt_q_ddot, gt_M_inv, gt_JcT, self.device, mode='test')
-    
+        return model_output, batch_info
+
     
     def forward_kinematics(self, pose, shape, gender_id, process_size_test, vertices=False, joints_smpl=False):
         rotmat, rotMat_individual = batch_roteulerSMPL(pose)
@@ -82,7 +144,16 @@ class RealtimePhysMop:
 
         return vertices, joints, joints_smpl, rotMat_individual
 
-    def post_process_output(self):
+    def model_output_to_3D_joints(self, model_output, batch_info, mode='train'):
+        # Unpack model output and batch info
+        pred_q_data, pred_q_physics_gt, pred_q_physics_pred, pred_q_fusion, pred_q_ddot_data, pred_q_ddot_physics_gt, fusion_weight = model_output
+        process_size_test = batch_info.process_size_test
+        test_batchsize = batch_info.test_batchsize
+        gt_shape = batch_info.gt_shape
+        gt_gender_id = batch_info.gt_gender_id
+        gt_joints = batch_info.gt_joints
+        gt_joints_smpl = batch_info.gt_joints_smpl
+
         # data-driven
         pred_pose_data = torch.zeros([test_batchsize,config.total_length,constants.n_smplpose]).type(torch.float32).to(self.device)
 
@@ -136,7 +207,9 @@ class RealtimePhysMop:
             pred_J_physics_gt = pred_joints_smpl_physics_gt[:, 3:22]
             pred_J_fusion = pred_joints_smpl_fusion[:, 3:22]
 
-    def evaluation_metrics(self):
+        return gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion
+
+    def evaluation_metrics(self, gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion):
         gt_J = gt_J.detach().cpu().numpy()
         pred_J_data = pred_J_data.detach().cpu().numpy()
         pred_J_physics_gt = pred_J_physics_gt.detach().cpu().numpy()
@@ -159,3 +232,29 @@ class RealtimePhysMop:
         
         perjaccel = compute_error_accel_T(gt_J.copy(), pred_J_fusion, config.total_length, 0)
         accel_fusion = (np.array(perjaccel) * constants.m2mm)
+
+from torch.utils.data import DataLoader, Subset
+from dataset.base_dataset_test import BaseDataset_test
+import time
+
+ds = "H36M" 
+if __name__ == "__main__":
+    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2025_07_01-20_18_08_2800.pt', device='auto')
+    dataset = BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length)
+
+    data_loader = DataLoader(
+        dataset=dataset,
+        batch_size=1,
+        shuffle=False,
+        num_workers=8
+    )
+
+    # Iterate and print the first batch
+    for batch in data_loader:
+        print("Batch keys:", batch.keys())
+        model_output, batch_info = realtime_model.predict(batch)
+        gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
+        print("Predicted joints shape:", pred_J_data.shape)
+
+        visualize_continuous_motion(pred_J_data.cpu().detach().numpy(), title='Predicted Joints Data')
+        break

@@ -42,7 +42,7 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         ax.clear()
         ax.set_xlim([-2, 2])
         ax.set_ylim([-1.5, 1.5])
-        ax.set_zlim([0, axes_limit])
+        ax.set_zlim([-1.5, 1.5])
         ax.set_xlabel("X")
         ax.set_ylabel("Y")
         ax.set_zlabel("Z")
@@ -50,16 +50,16 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         ax.set_title(f"Frame {frame_idx}: {motion_sequence[frame_idx, 0]}")
 
         joints = motion_sequence[frame_idx]
-        # ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2], c='r', marker='o')
+        ax.scatter(joints[:, 0], joints[:, 2], joints[:, 1], c='r', marker='o')
 
-        #  # Add joint indices as text annotations
-        # for joint_idx, (x, y, z) in enumerate(joints):
-        #     ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
-        for connection in connections:
-            joint1, joint2 = connection
-            ax.plot([joints[joint1, 0], joints[joint2, 0]],
-                    [joints[joint1, 2], joints[joint2, 2]],
-                    [joints[joint1, 1], joints[joint2, 1]], 'r', alpha=0.5)
+         # Add joint indices as text annotations
+        for joint_idx, (x, z, y) in enumerate(joints):
+            ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
+        # for connection in connections:
+        #     joint1, joint2 = connection
+        #     ax.plot([joints[joint1, 0], joints[joint2, 0]],
+        #             [joints[joint1, 2], joints[joint2, 2]],
+        #             [joints[joint1, 1], joints[joint2, 1]], 'r', alpha=0.5)
 
         plt.pause(0.05)  # Adjust the pause duration for smoother animation
 
@@ -96,6 +96,6 @@ def preprocess(filename):
 
     return rotated_joint_positions
         
-filename = '{0}/{1}/{2}_{3}.txt'.format(config.h36m_anno_dir, "S1", "walking", 1)
-motion_sequence = preprocess(filename)
-visualize_continuous_motion(motion_sequence/1000., title="Continuous Motion Visualization")
+# filename = '{0}/{1}/{2}_{3}.txt'.format(config.h36m_anno_dir, "S1", "walking", 1)
+# motion_sequence = preprocess(filename)
+# visualize_continuous_motion(motion_sequence/1000., title="Continuous Motion Visualization")
