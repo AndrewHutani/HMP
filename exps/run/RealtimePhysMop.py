@@ -14,6 +14,8 @@ from dataclasses import dataclass
 
 from visualize_motion import visualize_continuous_motion, visualize_motion_with_ground_truth
 
+from dataset.action_aware_dataset import ActionAwareDataset, ActionSampler
+
 @dataclass
 class BatchInfo:
     process_size_test: int
@@ -248,29 +250,30 @@ def get_specific_batch(data_loader, batch_index):
 ds = "H36M" 
 if __name__ == "__main__":
     realtime_model = RealtimePhysMop('ckpt/PhysMoP/2025_07_01-20_18_08_2800.pt', device='auto')
-    dataset = BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length)
-
-    data_loader = DataLoader(
-        dataset=dataset,
-        batch_size=1,
-        shuffle=False,
-        num_workers=8
+    # Option 2: Load only walking data
+    print("\n=== Loading walking data only ===")
+    walking_dataset = ActionAwareDataset(
+        'data/data_processed/h36m_test_50.pkl',
+        specific_action='walking'
     )
-    print(f"Total batches in data_loader: {len(data_loader)}")
+    
+    walking_loader = DataLoader(walking_dataset, batch_size=1, shuffle=False)
+    print(f"Total batches in data_loader: {len(walking_loader)}")
 
-    # Select specific batch efficiently
-    batch_index = 1294
-    specific_batch = get_specific_batch(data_loader, batch_index)
-
-    if specific_batch is not None:
-        print(f"Successfully retrieved batch {batch_index}")
-        print("Batch keys:", specific_batch.keys())
+    # Process first walking sample
+    for i, batch in enumerate(walking_loader):
+        print(f"Processing walking sample {i}")
+        print(f"Action: {batch['action'][0]}")
+        print(f"File: {batch['file_path'][0]}")
         
-        model_output, batch_info = realtime_model.predict(specific_batch)
-        gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
-        print("Predicted joints shape:", pred_J_data.shape)
-        visualize_continuous_motion(gt_J.cpu().detach().numpy(), title="Predicted Joints Data")
+        model_output, batch_info = realtime_model.predict(batch)
+        gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(
+            model_output, batch_info, mode='test'
+        )
+        
+        print(f"Prediction shape: {pred_J_data.shape}")
         
         visualize_motion_with_ground_truth(pred_J_fusion.cpu().detach(), gt_J.cpu().detach())
-    else:
-        print(f"Batch {batch_index} not found")
+        
+        # Only process first sample for demo
+        # break

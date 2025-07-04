@@ -183,17 +183,17 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
 
         ax.legend()
         # Draw skeleton connections for predicted motion
-        for connection in connections:
-            joint1, joint2 = connection
-            ax.plot([predicted_joints[joint1, 0], predicted_joints[joint2, 0]],
-                    [predicted_joints[joint1, 2], predicted_joints[joint2, 2]],
-                    [predicted_joints[joint1, 1], predicted_joints[joint2, 1]], 'r', alpha=0.5)
-            ax.plot(
-                [ground_truth_joints[joint1, 0], ground_truth_joints[joint2, 0]],
-                [ground_truth_joints[joint1, 2], ground_truth_joints[joint2, 2]],
-                [ground_truth_joints[joint1, 1], ground_truth_joints[joint2, 1]],
-                c='b'
-            )  
+        # for connection in connections:
+        #     joint1, joint2 = connection
+        #     ax.plot([predicted_joints[joint1, 0], predicted_joints[joint2, 0]],
+        #             [predicted_joints[joint1, 2], predicted_joints[joint2, 2]],
+        #             [predicted_joints[joint1, 1], predicted_joints[joint2, 1]], 'r', alpha=0.5)
+        #     ax.plot(
+        #         [ground_truth_joints[joint1, 0], ground_truth_joints[joint2, 0]],
+        #         [ground_truth_joints[joint1, 2], ground_truth_joints[joint2, 2]],
+        #         [ground_truth_joints[joint1, 1], ground_truth_joints[joint2, 1]],
+        #         c='b'
+        #     )  
 
         plt.pause(0.5)  # Pause to display each frame
 
