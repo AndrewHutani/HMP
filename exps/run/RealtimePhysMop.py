@@ -276,6 +276,10 @@ selected_indices = [t + config.hist_length - 1 for t in time_idx]
 ds = "H36M" 
 if __name__ == "__main__":
     realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
+
+    log_files = ["physmop_data_mpjpe_log.txt", "physmop_physics_mpjpe_log.txt", "physmop_fusion_mpjpe_log.txt"]
+    log_file_handles = [open(f, "w") for f in log_files]  # Open all files once in write mode
+
     for action in actions:
         print(f"Evaluating action: {action}")
         dataset = ActionAwareDataset(
@@ -328,20 +332,21 @@ if __name__ == "__main__":
 
 #         mpjpe_mean = np.mean(mpjpe_all_samples, axis=0)  # shape: (obs_len,)
         log_files = ["physmop_data_mpjpe_log.txt", "physmop_physics_mpjpe_log.txt", "physmop_fusion_mpjpe_log.txt"]
-        for i, log_filename in enumerate(log_files):
-            with open(log_filename, "w") as log_file:
-                if i == 0:
-                    mjpe_mean = np.mean(mpjpe_data_all, axis=0) # shape: (obs_len, 8)
-                elif i == 1:
-                    mjpe_mean = np.mean(mpjpe_physics_gt_all, axis=0)  # shape: (obs_len, 8)
-                else:
-                    mjpe_mean = np.mean(mpjpe_fusion_all, axis=0)  # shape: (obs_len, 8)
+        for i, log_file in enumerate(log_file_handles):
+            if i == 0:
+                mjpe_mean = np.mean(mpjpe_data_all, axis=0) # shape: (obs_len, 8)
+            elif i == 1:
+                mjpe_mean = np.mean(mpjpe_physics_gt_all, axis=0)  # shape: (obs_len, 8)
+            else:
+                mjpe_mean = np.mean(mpjpe_fusion_all, axis=0)  # shape: (obs_len, 8)
 
-                # Write to log file
+            # Write to log file
 
-                log_file.write(f"Averaged MPJPE for each observation length and each selected timestep: {action}\n")
-                for obs_len in range(mjpe_mean.shape[0]):
-                    log_file.write(f"Obs {obs_len+1}: {mjpe_mean[obs_len]}\n")
-                log_file.write("\n")
+            log_file.write(f"Averaged MPJPE for each observation length and each selected timestep: {action}\n")
+            for obs_len in range(mjpe_mean.shape[0]):
+                log_file.write(f"Obs {obs_len+1}: {mjpe_mean[obs_len]}\n")
+            log_file.write("\n")
 
-            print(f"PhysMoP MPJPE logs saved to {log_filename}")
+    # Close all log files at the end
+    for log_file in log_file_handles:
+        log_file.close()
