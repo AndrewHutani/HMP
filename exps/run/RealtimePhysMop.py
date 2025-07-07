@@ -345,7 +345,7 @@ if __name__ == "__main__":
 
             log_file.write(f"Averaged MPJPE for each observation length and each selected timestep: {action}\n")
             for obs_len in range(mjpe_mean.shape[0]):
-                log_file.write(f"Obs {obs_len+1}: {mjpe_mean[obs_len]}\n")
+                log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mjpe_mean[obs_len]]) + "]\n")
             log_file.write("\n")
 
     # Close all log files at the end
