@@ -39,9 +39,10 @@ class RealtimePhysMop:
         self.model = PhysMoP(hist_length=config.hist_length,
                                        physics=True,
                                        data=True,
-                                       fusion=True
+                                       fusion=True,
+                                       device=self.device
                                        ).to(self.device)
-        checkpoint = torch.load(checkpoint_path)
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model'], strict=True)
         self.model.eval()
 
@@ -274,7 +275,7 @@ selected_indices = [t + config.hist_length - 1 for t in time_idx]
 
 ds = "H36M" 
 if __name__ == "__main__":
-    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='auto')
+    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
     for action in actions:
         print(f"Evaluating action: {action}")
         dataset = ActionAwareDataset(

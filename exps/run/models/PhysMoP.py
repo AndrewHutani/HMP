@@ -210,12 +210,13 @@ class PhysMoP(nn.Module):
             hist_length,
             physics=True, 
             data=True,
-            fusion=False
+            fusion=False, 
+            device = None
     ):
 
         super(PhysMoP, self).__init__()
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = device
         print('Using device:', self.device)
         self.hist_length = hist_length
         self.fusion=fusion
