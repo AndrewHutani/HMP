@@ -16,6 +16,8 @@ from visualize_motion import visualize_continuous_motion, visualize_motion_with_
 
 from dataset.action_aware_dataset import ActionAwareDataset, ActionSampler
 
+from tqdm import tqdm
+
 @dataclass
 class BatchInfo:
     process_size_test: int
@@ -75,6 +77,17 @@ class RealtimePhysMop:
             - 'shape': Tensor of shape (Batch size, Frames, 10) representing SMPL shape parameters (?)
             - gender_id: Tensor of shape (Batch size, Frames) representing which gender to use
         """
+        # Pad all time-dependent tensors to config.total_length at the front if needed
+        pad_len = config.total_length - data_test['q'].shape[1]
+        if pad_len > 0:
+            for k in ['q', 'shape', 'gender_id']:
+                v = data_test[k]
+                pad_shape = list(v.shape)
+                pad_shape[1] = pad_len
+                pad_tensor = v[:, :1, ...].expand(*pad_shape)  # Repeat first frame
+                data_test[k] = torch.cat([pad_tensor, v], dim=1)
+        
+
         # Data Format Conversion & Extraction
         gt_q = data_test['q'].type(torch.float32)
         test_batchsize = gt_q.shape[0]
@@ -236,6 +249,8 @@ class RealtimePhysMop:
         perjaccel = compute_error_accel_T(gt_J.copy(), pred_J_fusion, config.total_length, 0)
         accel_fusion = (np.array(perjaccel) * constants.m2mm)
 
+        return error_test_data, error_test_physics_gt, error_test_fusion, accel_data, accel_physics_gt, accel_fusion
+
 from torch.utils.data import DataLoader, Subset
 from dataset.base_dataset_test import BaseDataset_test
 import time
@@ -247,33 +262,85 @@ def get_specific_batch(data_loader, batch_index):
             return batch
     return None
 
+actions = [
+    "walking", "eating", 
+    "smoking", "discussion", "directions",
+    "greeting", "phoning", "posing", "purchases", "sitting",
+    "sittingdown", "takingphoto", "waiting", "walkingdog",
+    "walkingtogether"
+]
+time_idx = [1, 3, 7, 9, 13, 17, 21, 24] # Corresponds to idx*40 ms in the future
+selected_indices = [t + config.hist_length - 1 for t in time_idx]
+
 ds = "H36M" 
 if __name__ == "__main__":
-    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2025_07_01-20_18_08_2800.pt', device='auto')
-    # Option 2: Load only walking data
-    print("\n=== Loading walking data only ===")
-    walking_dataset = ActionAwareDataset(
-        'data/data_processed/h36m_test_50.pkl',
-        specific_action='walking'
-    )
-    
-    walking_loader = DataLoader(walking_dataset, batch_size=1, shuffle=False)
-    print(f"Total batches in data_loader: {len(walking_loader)}")
-
-    # Process first walking sample
-    for i, batch in enumerate(walking_loader):
-        print(f"Processing walking sample {i}")
-        print(f"Action: {batch['action'][0]}")
-        print(f"File: {batch['file_path'][0]}")
-        
-        model_output, batch_info = realtime_model.predict(batch)
-        gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(
-            model_output, batch_info, mode='test'
+    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='auto')
+    for action in actions:
+        print(f"Evaluating action: {action}")
+        dataset = ActionAwareDataset(
+            'data/data_processed/h36m_test_50.pkl',
+            specific_action=action
         )
-        
-        print(f"Prediction shape: {pred_J_data.shape}")
-        
-        visualize_motion_with_ground_truth(pred_J_fusion.cpu().detach(), gt_J.cpu().detach())
-        
-        # Only process first sample for demo
-        # break
+        loader = DataLoader(dataset, batch_size=1, shuffle=False)
+        mpjpe_data_all = []
+        mpjpe_physics_gt_all = []
+        mpjpe_fusion_all = []
+        accel_data_all = []
+        accel_physics_gt_all = []
+        accel_fusion_all = []
+
+        for i, batch in tqdm(enumerate(loader), total=len(loader), desc=f"{action} samples"):
+            # Assume batch['q'] shape: (1, T, 3), T = total frames
+            T = batch['q'].shape[1]
+            mpjpe_data_per_obs = []
+            mpjpe_physics_gt_per_obs = []
+            mpjpe_fusion_per_obs = []
+            accel_data_per_obs = []
+            accel_physics_gt_per_obs = []
+            accel_fusion_per_obs = []
+            for i in range(config.hist_length):
+                start_idx = 24 - i
+                # Trim input to last obs_len frames
+                batch_trimmed = {k: v[:, start_idx:config.total_length, ...] if isinstance(v, torch.Tensor) and v.shape[1] == config.total_length else v for k, v in batch.items()}
+                model_output, batch_info = realtime_model.predict(batch_trimmed)
+                gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
+                # Compute MPJPE for this observation length (example: using pred_J_fusion)
+                error_test_data, error_test_physics_gt, error_test_fusion, accel_data, accel_physics_gt, accel_fusion = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
+
+                mpjpe_data_per_obs.append(error_test_data[0, selected_indices]) 
+                mpjpe_physics_gt_per_obs.append(error_test_physics_gt[0, selected_indices])
+                mpjpe_fusion_per_obs.append(error_test_fusion[0, selected_indices])
+                # accel_data_per_obs.append(accel_data[0, selected_indices])
+                # accel_physics_gt_per_obs.append(accel_physics_gt[0, selected_indices])
+                # accel_fusion_per_obs.append(accel_fusion[0, selected_indices])
+
+            mpjpe_data_all.append(mpjpe_data_per_obs) 
+            mpjpe_physics_gt_all.append(mpjpe_physics_gt_per_obs)
+            mpjpe_fusion_all.append(mpjpe_fusion_per_obs)
+            # accel_data_all.append(accel_data_per_obs)
+            # accel_physics_gt_all.append(accel_physics_gt_per_obs)
+            # accel_fusion_all.append(accel_fusion_per_obs)
+
+        mpjpe_data_all = np.array(mpjpe_data_all)  # shape: (num_samples, obs_len, 8)
+        mpjpe_physics_gt_all = np.array(mpjpe_physics_gt_all)  # shape: (num_samples, obs_len, 8)
+        mpjpe_fusion_all = np.array(mpjpe_fusion_all)  # shape: (num_samples, obs_len, 8)
+
+#         mpjpe_mean = np.mean(mpjpe_all_samples, axis=0)  # shape: (obs_len,)
+        log_files = ["physmop_data_mpjpe_log.txt", "physmop_physics_mpjpe_log.txt", "physmop_fusion_mpjpe_log.txt"]
+        for i, log_filename in enumerate(log_files):
+            with open(log_filename, "w") as log_file:
+                if i == 0:
+                    mjpe_mean = np.mean(mpjpe_data_all, axis=0) # shape: (obs_len, 8)
+                elif i == 1:
+                    mjpe_mean = np.mean(mpjpe_physics_gt_all, axis=0)  # shape: (obs_len, 8)
+                else:
+                    mjpe_mean = np.mean(mpjpe_fusion_all, axis=0)  # shape: (obs_len, 8)
+
+                # Write to log file
+
+                log_file.write(f"Averaged MPJPE for each observation length and each selected timestep: {action}\n")
+                for obs_len in range(mjpe_mean.shape[0]):
+                    log_file.write(f"Obs {obs_len+1}: {mjpe_mean[obs_len]}\n")
+                log_file.write("\n")
+
+            print(f"PhysMoP MPJPE logs saved to {log_filename}")

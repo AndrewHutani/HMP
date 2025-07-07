@@ -177,6 +177,10 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         predicted_joints = predicted_positions[frame_idx - 1]  # Subtract 1 because time_steps are 1-based
         ax.scatter(predicted_joints[:, 0], predicted_joints[:, 2], predicted_joints[:, 1], c='r', marker='o', label='Predicted')
 
+        # # Add joint indices as text annotations
+        # for joint_idx, (x, z, y) in enumerate(predicted_joints):
+        #     ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
+
         # Plot ground truth joints for the specific frame
         ground_truth_joints = ground_truth_positions[frame_idx - 1]
         ax.scatter(ground_truth_joints[:, 0], ground_truth_joints[:, 2], ground_truth_joints[:, 1], c='b', marker='^', label='Ground Truth')
@@ -195,7 +199,7 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         #         c='b'
         #     )  
 
-        plt.pause(0.5)  # Pause to display each frame
+        plt.pause(0.1)  # Pause to display each frame
 
     plt.show()
         
