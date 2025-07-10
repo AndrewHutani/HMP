@@ -45,13 +45,13 @@ add_path(osp.join(C.root_dir, 'lib'))
 # TODO
 
 """Dataset Config"""
-C.h36m_anno_dir = osp.join(C.root_dir, 'data/h36m/')
+C.amass_anno_dir = osp.join(C.root_dir, 'data/amass/')
 C.motion = edict()
 
-C.motion.h36m_input_length = 50
-C.motion.h36m_input_length_dct = 50
-C.motion.h36m_target_length_train = 10
-C.motion.h36m_target_length_eval = 25
+C.motion.amass_input_length = 50
+C.motion.amass_input_length_dct  = 50
+C.motion.amass_target_length_train = 10
+C.motion.amass_target_length_eval = 25
 C.motion.dim = 66
 
 C.data_aug = True
@@ -67,7 +67,7 @@ C.post_dct = False
 dim_ = 66
 C.motion_mlp = edict()
 C.motion_mlp.hidden_dim = dim_
-C.motion_mlp.seq_len = C.motion.h36m_input_length_dct
+C.motion_mlp.seq_len = C.motion.amass_input_length_dct
 C.motion_mlp.num_layers = 48
 C.motion_mlp.with_normalization = True
 C.motion_mlp.spatial_fc_only = False

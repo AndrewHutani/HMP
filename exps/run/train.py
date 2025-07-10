@@ -11,10 +11,10 @@ import time
 
 from config import config
 from model import GCNext as Model
-from datasets.h36m import H36MDataset
 from utils.logger import get_logger, print_and_log_info
 from utils.pyt_utils import link_file, ensure_dir
-from datasets.h36m_eval import H36MEval
+from datasets.amass import AMASSDataset
+from datasets.amass_eval import AMASSEval
 from test import test
 import torch
 from torch.utils.data import DataLoader
@@ -34,12 +34,12 @@ parser.add_argument('--num', type=int, default=48, help='=num of blocks')
 parser.add_argument('--weight', type=float, default=1., help='=loss weight')
 
 parser.add_argument('--exp', type=str, default='baseline', help='=exp name')
-parser.add_argument('--lr', type=float, default=3e-4, help='learning rate in first 30000 iters')
-parser.add_argument('--lrr', type=float, default=1e-5, help='learning rate after 30000 iters')
+parser.add_argument('--lr', type=float, default= 0.0003, help='learning rate in first 30000 iters')
+parser.add_argument('--lrr', type=float, default=0.000001, help='learning rate after 30000 iters')
 parser.add_argument('--bs', type=int, default=256, help='=batch_size')
 parser.add_argument('--worker', type=int, default=0, help='=num_worker')
-parser.add_argument('--iters', type=int, default=40000, help='=number of iterations')
-parser.add_argument('--c_iters', type=int, default=30000, help='=number of iterations')
+parser.add_argument('--iters', type=int, default=115000, help='=number of iterations')
+parser.add_argument('--c_iters', type=int, default=100000, help='=number of iterations')
 
 parser.add_argument('--aux_lr', type=float, default=1e-8, help='learning rate for auxiliary params')    # 默认1e-7
 
@@ -81,7 +81,7 @@ def get_dct_matrix(N):
     idct_m = np.linalg.inv(dct_m)
     return dct_m, idct_m
 
-dct_m,idct_m = get_dct_matrix(config.motion.h36m_input_length_dct)
+dct_m,idct_m = get_dct_matrix(config.motion.amass_input_length_dct)
 dct_m = torch.tensor(dct_m).float().cuda().unsqueeze(0)
 idct_m = torch.tensor(idct_m).float().cuda().unsqueeze(0)
 
@@ -99,39 +99,31 @@ def gen_velocity(m):
     dm = m[:, 1:] - m[:, :-1]
     return dm
 
-def train_step(h36m_motion_input, h36m_motion_target, model, optimizer, nb_iter, total_iter, max_lr, min_lr, tau) :
-    if nb_iter % 100 == 0:
-        print(f"Starting train_step for iteration {nb_iter}")
-    if config.deriv_input:
-        b,n,c = h36m_motion_input.shape
-        h36m_motion_input_ = h36m_motion_input.clone()
-        h36m_motion_input_ = torch.matmul(dct_m[:, :config.motion.h36m_input_length, :], h36m_motion_input_.cuda())
-    else:
-        h36m_motion_input_ = h36m_motion_input.clone()
+def train_step(amass_motion_input, amass_motion_target, model, optimizer, nb_iter, total_iter, max_lr, min_lr) :
 
-    # Forward pass
-    motion_pred = model(h36m_motion_input_.cuda(), tau)
-    motion_pred = torch.matmul(idct_m[:, :, :config.motion.h36m_input_length], motion_pred)
+    if config.deriv_input:
+        b,n,c = amass_motion_input.shape
+        amass_motion_input_ = amass_motion_input.clone()
+        amass_motion_input_ = torch.matmul(dct_m, amass_motion_input_.cuda())
+    else:
+        amass_motion_input_ = amass_motion_input.clone()
+
+    motion_pred = model(amass_motion_input_.cuda())
+    motion_pred = torch.matmul(idct_m, motion_pred)
 
     if config.deriv_output:
-        offset = h36m_motion_input[:, -1:].cuda()
-        motion_pred = motion_pred[:, :config.motion.h36m_target_length] + offset
-    else:
-        motion_pred = motion_pred[:, :config.motion.h36m_target_length]
+        offset = amass_motion_input[:, -1:].cuda()
+        motion_pred = motion_pred[:, :config.motion.amass_target_length] + offset
 
-    # Reshape predictions and targets
-    b,n,c = h36m_motion_target.shape
-    motion_pred = motion_pred.reshape(b,n,22,3).reshape(-1,3)
-    h36m_motion_target = h36m_motion_target.cuda().reshape(b,n,22,3).reshape(-1,3)
+    b,n,c = amass_motion_target.shape
+    motion_pred = motion_pred.reshape(b,n,18,3).reshape(-1,3)
+    amass_motion_target = amass_motion_target.cuda().reshape(b,n,18,3).reshape(-1,3)
+    loss = torch.mean(torch.norm(motion_pred - amass_motion_target, 2, 1))
 
-    # Compute the primary loss (Mean Squared Error)
-    loss = torch.mean(torch.norm(motion_pred - h36m_motion_target, 2, 1))
-
-    # Compute additional loss if `use_relative_loss` is enabled
     if config.use_relative_loss:
-        motion_pred = motion_pred.reshape(b,n,22,3)
+        motion_pred = motion_pred.reshape(b,n,18,3)
         dmotion_pred = gen_velocity(motion_pred)
-        motion_gt = h36m_motion_target.reshape(b,n,22,3)
+        motion_gt = amass_motion_target.reshape(b,n,18,3)
         dmotion_gt = gen_velocity(motion_gt)
         dloss = torch.mean(torch.norm((dmotion_pred - dmotion_gt).reshape(-1,3), 2, 1))
         loss = loss + dloss
@@ -140,7 +132,6 @@ def train_step(h36m_motion_input, h36m_motion_target, model, optimizer, nb_iter,
 
     writer.add_scalar('Loss/angle', loss.detach().cpu().numpy(), nb_iter)
 
-    # Parameters are updated here
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -149,24 +140,22 @@ def train_step(h36m_motion_input, h36m_motion_target, model, optimizer, nb_iter,
 
     return loss.item(), optimizer, current_lr
 
-model = Model(config, args.dyna)
-print(">>> total params: {:.2f}M".format(sum(p.numel() for p in model.parameters()) / 1000000.0))
+model = Model(config)
 model.train()
 model.cuda()
 
-config.motion.h36m_target_length = config.motion.h36m_target_length_train
-dataset = H36MDataset(config, 'train', config.data_aug)
+config.motion.amass_target_length = config.motion.amass_target_length_train
+dataset = AMASSDataset(config, 'train', config.data_aug)
 
 shuffle = True
 sampler = None
 dataloader = DataLoader(dataset, batch_size=config.batch_size,
                         num_workers=config.num_workers, drop_last=True,
                         sampler=sampler, shuffle=shuffle, pin_memory=True)
-print(len(dataloader))
 
 eval_config = copy.deepcopy(config)
-eval_config.motion.h36m_target_length = eval_config.motion.h36m_target_length_eval
-eval_dataset = H36MEval(eval_config, 'test')
+eval_config.motion.amass_target_length = eval_config.motion.amass_target_length_eval
+eval_dataset = AMASSEval(eval_config, 'test')
 
 shuffle = False
 sampler = None
@@ -176,22 +165,13 @@ eval_dataloader = DataLoader(eval_dataset, batch_size=128,
 
 
 # initialize optimizer
-all_params = model.parameters()
-aux_params = []
-for pname, p in model.named_parameters():
-    if any([pname.endswith(k) for k in ['adj_j', 'in_weight', 'out_weight', 'adj_t', 'adj_c', 'adj_tj', 'adj_jc', 'adj_tc']]):
-        aux_params += [p]
-params_id = list(map(id, aux_params))
-other_params = list(filter(lambda p: id(p) not in params_id, all_params))
-
-
-# initialize optimizer
-optimizer = torch.optim.Adam([{'params': other_params},
-                              {'params': aux_params, 'lr': args.aux_lr}],
+optimizer = torch.optim.Adam(model.parameters(),
                              lr=config.cos_lr_max,
                              weight_decay=config.weight_decay)
 
-logger = get_logger(f"ckpt/{args.exp}/log.log", 'train')
+ensure_dir(config.snapshot_dir)
+logger = get_logger(config.log_file, 'train')
+link_file(config.log_file, config.link_log_file)
 
 print_and_log_info(logger, json.dumps(config, indent=4, sort_keys=True))
 
@@ -213,47 +193,49 @@ stt = time.time()
 tau = args.tau
 tau_decay = -0.045
 
-while (nb_iter + 1) < config.cos_lr_total_iters:
-    for (h36m_motion_input, h36m_motion_target) in dataloader:
-        if (nb_iter + 1) < args.c_iters - 1001:
-            save_every = 5000
-        elif (nb_iter + 1) < args.c_iters + 5001:
-            save_every = 1000
-        else:
-            save_every = 2000
+from tqdm import tqdm
+with tqdm(total=config.cos_lr_total_iters, initial=nb_iter, desc="Training") as pbar:
+    while (nb_iter + 1) < config.cos_lr_total_iters:
+        for (amass_motion_input, amass_motion_target) in dataloader:
+            if (nb_iter + 1) < args.c_iters - 1001:
+                save_every = 5000
+            elif (nb_iter + 1) < args.c_iters + 5001:
+                save_every = 1000
+            else:
+                save_every = 2000
+            print("Every {} iterations, save model".format(save_every))
+            if (nb_iter + 1) % len(dataloader) == 0:
+                tau = tau * np.exp(tau_decay)
 
-        if (nb_iter + 1) % len(dataloader) == 0:
-            tau = tau * np.exp(tau_decay)
+            loss, optimizer, current_lr = train_step(amass_motion_input, amass_motion_target, model, optimizer, nb_iter, config.cos_lr_total_iters, config.cos_lr_max, config.cos_lr_min, tau)
+            avg_loss += loss
+            avg_lr += current_lr
 
-        loss, optimizer, current_lr = train_step(h36m_motion_input, h36m_motion_target, model, optimizer, nb_iter, config.cos_lr_total_iters, config.cos_lr_max, config.cos_lr_min, tau)
-        avg_loss += loss
-        avg_lr += current_lr
+            if (nb_iter + 1) % config.print_every ==  0 :
+                avg_loss = avg_loss / config.print_every
+                avg_lr = avg_lr / config.print_every
 
-        if (nb_iter + 1) % config.print_every ==  0 :
-            avg_loss = avg_loss / config.print_every
-            avg_lr = avg_lr / config.print_every
+                print_and_log_info(logger, "Iter {} Summary: ".format(nb_iter + 1))
+                print_and_log_info(logger, f"\t lr: {avg_lr} \t Training loss: {avg_loss}")
+                avg_loss = 0
+                avg_lr = 0
 
-            print_and_log_info(logger, "Iter {} Summary: ".format(nb_iter + 1))
-            print_and_log_info(logger, f"\t lr: {avg_lr} \t Training loss: {avg_loss}")
-            avg_loss = 0
-            avg_lr = 0
-
-        if (nb_iter + 1) % save_every ==  0 :
-            torch.save(model.state_dict(), f'ckpt/{args.exp}/model-iter-' + str(nb_iter + 1) + '.pth')
-            model.eval()
-            acc_tmp = test(eval_config, model, eval_dataloader, tau)
-            print(f"Training Progress: {nb_iter + 1}/{config.cos_lr_total_iters}")
-            print(f"Lr: {current_lr}")
-            print(acc_tmp)
-            acc_log.write(''.join(str(nb_iter + 1) + '\n'))
-            line = ''
-            for ii in acc_tmp:
-                line += str(ii) + ' '
-            line += '\n'
-            acc_log.write(''.join(line))
-            model.train()
-        if (nb_iter + 1) == config.cos_lr_total_iters :
-            break
-        nb_iter += 1
+            if (nb_iter + 1) % save_every ==  0 :
+                torch.save(model.state_dict(), f'ckpt/{args.exp}/model-iter-' + str(nb_iter + 1) + '.pth')
+                model.eval()
+                acc_tmp = test(eval_config, model, eval_dataloader, tau)
+                print(f"Training Progress: {nb_iter + 1}/{config.cos_lr_total_iters}")
+                print(f"Lr: {current_lr}")
+                print(acc_tmp)
+                acc_log.write(''.join(str(nb_iter + 1) + '\n'))
+                line = ''
+                for ii in acc_tmp:
+                    line += str(ii) + ' '
+                line += '\n'
+                acc_log.write(''.join(line))
+                model.train()
+            if (nb_iter + 1) == config.cos_lr_total_iters :
+                break
+            nb_iter += 1
 
 writer.close()
