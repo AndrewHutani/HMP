@@ -2,3 +2,4 @@
 *.py[cod]
 data/h36m/test
 data/h36m/train
+data/amass

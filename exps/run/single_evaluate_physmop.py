@@ -8,11 +8,11 @@ from dataset.base_dataset_test import BaseDataset_test
 import utils.config as config
 
 
-ds = "AMASS" 
+ds = "H36M" 
 if __name__ == "__main__":
-    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2025_07_01-20_18_08_2800.pt', device='auto')
+    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
     # Option 2: Load only walking data
-    print("\n=== Loading walking data only ===")
+    # print("\n=== Loading walking data only ===")
     # walking_dataset = ActionAwareDataset(
     #     'data/data_processed/h36m_test_50.pkl',
     #     specific_action='walking'
@@ -31,12 +31,13 @@ if __name__ == "__main__":
         # print(f"Action: {batch['action'][0]}")
         # print(f"File: {batch['file_path'][0]}")
         print("Batch keys:", batch.keys())
+        print("Root joint:", batch['q'][:, :25, :3])
         
         model_output, batch_info = realtime_model.predict(batch)
         gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(
             model_output, batch_info, mode='test'
         )
-        print(gt_J[0])
+        # print(gt_J[0])
         
         print(f"Prediction shape: {pred_J_data.shape}")
         visualize_continuous_motion(gt_J.cpu().detach(), title=f"Je moeder")
