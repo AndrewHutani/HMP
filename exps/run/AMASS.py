@@ -67,7 +67,6 @@ def read_sequence(trunk_datafolder, trunk_path, folder, seq_name, fps, seqlen, o
             sampling_freq = mocap_framerate // fps
             pose = data['poses'][::sampling_freq]
             pose = torch.from_numpy(pose[:, :22*3]).type(torch.float32).to(device)
-            print(f'Pose shape after selecting joints: {pose.shape}')
             rotmat = batch_rodrigues(pose.view(-1,1,3)).view(-1,22,3,3)
 
             if pose.shape[0] < 80:

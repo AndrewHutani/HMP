@@ -55,10 +55,10 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         ax.set_title(f"Frame {frame_idx}: {motion_sequence[frame_idx, 0]}")
 
         joints = motion_sequence[frame_idx]
-        ax.scatter(joints[:, 0], joints[:, 2], joints[:, 1], c='r', marker='o')
+        ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2], c='r', marker='o')
 
          # Add joint indices as text annotations
-        for joint_idx, (x, z, y) in enumerate(joints):
+        for joint_idx, (x, y, z) in enumerate(joints):
             ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
         # for connection in amass_connections:
         #     joint1, joint2 = connection
