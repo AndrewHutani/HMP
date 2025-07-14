@@ -782,3 +782,40 @@ def rotmat2eulerzxy(rotmat):
     eulerangle[cx<=cx_thresh,2] = torch.atan2(-r12[cx<=cx_thresh], r11[cx<=cx_thresh])
 
     return eulerangle
+
+def map_h36m_to_amass(motion_sequence):
+    """
+    Map the H36M motion sequence to AMASS format.
+
+    :param motion_sequence: Numpy array of shape [num_frames, num_joints, 3] (H36M motion sequence).
+    :return: Mapped motion sequence in AMASS format.
+    """
+    # Assuming the mapping is straightforward for this example
+    h36m_motion_sequence = motion_sequence
+    amass_motion_sequence = np.zeros((h36m_motion_sequence.shape[0], 22, 3))
+
+    amass_motion_sequence[:, 0, :] = h36m_motion_sequence[:, 0, :]  # Root joint
+    amass_motion_sequence[:, 1, :] = h36m_motion_sequence[:, 1, :]  # LHIP
+    amass_motion_sequence[:, 2, :] = h36m_motion_sequence[:, 6, :]  # RHIP
+    amass_motion_sequence[:, 3, :] = (h36m_motion_sequence[:, 0, :] + h36m_motion_sequence[:, 12, :])/2  # Spine1
+    amass_motion_sequence[:, 4, :] = h36m_motion_sequence[:, 2, :]  # LKNEE
+    amass_motion_sequence[:, 5, :] = h36m_motion_sequence[:, 7, :]  # RKNEE
+    amass_motion_sequence[:, 6, :] = h36m_motion_sequence[:, 12, :]  # Spine2
+    amass_motion_sequence[:, 7, :] = h36m_motion_sequence[:, 3, :]  # LANKLE
+    amass_motion_sequence[:, 8, :] = h36m_motion_sequence[:, 8, :]  # RANKLE
+    amass_motion_sequence[:, 9, :] = amass_motion_sequence[:, 6, :] + 0.2*h36m_motion_sequence[:, 13, :]  # Spine3
+    amass_motion_sequence[:, 10, :] = h36m_motion_sequence[:, 4, :]  # LFOOT
+    amass_motion_sequence[:, 11, :] = h36m_motion_sequence[:, 9, :]  # RFOOT
+    amass_motion_sequence[:, 12, :] = h36m_motion_sequence[:, 14, :]  # NECK
+    amass_motion_sequence[:, 13, :] = (amass_motion_sequence[:, 9, :] + h36m_motion_sequence[:, 25, :])/2  # LCOLLAR
+    amass_motion_sequence[:, 14, :] = (amass_motion_sequence[:, 9, :] + h36m_motion_sequence[:, 17, :])/2  # RCOLLAR
+    amass_motion_sequence[:, 15, :] = h36m_motion_sequence[:, 15, :]  # HEAD
+    amass_motion_sequence[:, 16, :] = h36m_motion_sequence[:, 25, :]  # LSHOULDER
+    amass_motion_sequence[:, 17, :] = h36m_motion_sequence[:, 17, :]  # RSHOULDER
+    amass_motion_sequence[:, 18, :] = h36m_motion_sequence[:, 26, :]  # LELBOW
+    amass_motion_sequence[:, 19, :] = h36m_motion_sequence[:, 18, :]  # RELBOW
+    amass_motion_sequence[:, 20, :] = h36m_motion_sequence[:, 27, :]  # LWRIST
+    amass_motion_sequence[:, 21, :] = h36m_motion_sequence[:, 19, :]  # RWRIST
+
+
+    return amass_motion_sequence

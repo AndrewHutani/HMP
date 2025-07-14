@@ -17,22 +17,28 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
     """
     axes_limit = 2
     # Define the connections between joints (skeleton structure)
-    connections = [
-        (2, 3), (5, 6),           # legs
-        (7, 8), (8, 9), (9, 10),  # spine/head
-        (8, 11), (11, 12), (12, 13), # left arm
-        (8, 14), (14, 15), (15, 16)  # right arm
+    amass_connections = [
+        # Spine/Torso/Head
+        (0, 3), (3,6), (6, 9), (9, 12), (12, 15),
+        #Left leg
+        (0, 1), (1, 4), (4, 7), (7, 10),
+        # Right leg
+        (0, 2), (2, 5), (5, 8), (8, 11),
+        # Left arm
+        (9, 13), (13, 16), (16, 18), (18, 20),
+        # Right arm
+        (9, 14), (14, 17), (17, 19), (19, 21)
     ]
 
-    # connections = [
-    #     (0 + 1, 1 + 1), (1 + 1, 2 + 1), (2 + 1, 3 + 1), (3 + 1, 4 + 1), (4 + 1, 5 + 1),
-    #     (0 + 1, 6 + 1), (6 + 1, 7 + 1), (7 + 1, 8 + 1), (8 + 1, 9 + 1), (9 + 1, 10 + 1),
-    #     (11 + 1, 12 + 1), (12 + 1, 13 + 1), (13 + 1, 14 + 1), (14 + 1, 15 + 1),
-    #     (16 + 1, 17 + 1), (17 + 1, 18 + 1), (18 + 1, 19 + 1), (19 + 1, 20 + 1), 
-    #     (20 + 1, 21 + 1), (21 + 1, 22 + 1), (22 + 1, 23 + 1),
-    #     (24 + 1, 25 + 1), (25 + 1, 26 + 1), (26 + 1, 27 + 1), (27 + 1, 28 + 1), 
-    #     (28 + 1, 29 + 1), (29 + 1, 30 + 1), (30 + 1, 31 + 1)
-    # ]
+    h36m_connections = [
+        (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
+        (0, 6), (6, 7), (7, 8), (8, 9), (9, 10),
+        (11, 12), (12, 13), (13, 14), (14, 15),
+        (16, 17), (17, 18), (18, 19), (19, 20), 
+        (20, 21), (21, 22), (22, 23),
+        (24, 25), (25, 26), (26, 27), (27, 28), 
+        (28, 29), (29, 30), (30, 31)
+    ]
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -54,7 +60,7 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
          # Add joint indices as text annotations
         for joint_idx, (x, y, z) in enumerate(joints):
             ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
-        # for connection in connections:
+        # for connection in amass_connections:
         #     joint1, joint2 = connection
         #     ax.plot([joints[joint1, 0], joints[joint2, 0]],
         #             [joints[joint1, 2], joints[joint2, 2]],
@@ -93,7 +99,7 @@ def preprocess(filename):
     print("Root position unsqueeze shape: ", torch.tensor(root_translation).float().unsqueeze(1).shape)
     rotated_joint_positions += torch.tensor(root_translation).float().unsqueeze(1)
 
-    return rotated_joint_positions
+    return joint_positions
 
 def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, title="Predicted vs Ground Truth Motion"):
     """
@@ -182,6 +188,12 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
 
     plt.show()
         
+
+
+
 # filename = '{0}/{1}/{2}_{3}.txt'.format(config.h36m_anno_dir, "S1", "walking", 1)
 # motion_sequence = preprocess(filename)
-# visualize_continuous_motion(motion_sequence/1000., title="Continuous Motion Visualization")
+# print("Motion sequence shape: ", motion_sequence.shape)
+# amass_motion_sequence = map_h36m_to_amass(motion_sequence)
+# print("AMASS motion sequence shape: ", amass_motion_sequence.shape)
+# visualize_continuous_motion(amass_motion_sequence/1000., title="Continuous Motion Visualization")

@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from scipy.ndimage import gaussian_filter1d, median_filter
 
-from utils.utils import batch_rodrigues, rotmat2eulerzyx, rotmat2euleryzx, rotmat2eulerzxy
+from utils.utils import batch_rodrigues, rotmat2eulerzyx, rotmat2euleryzx, rotmat2eulerzxy, map_h36m_to_amass
 
 device = torch.device('cpu')
 
@@ -48,11 +48,19 @@ def read_sequence(trunk_datafolder, trunk_path, folder, seq_name, fps, seqlen, o
         num_joints = n_feats // 3
 
         # pose       
+        # Select joints
+        # This is awful, we need the following joints: 
+            # 0: pelvis, 1: left_hip, 2: right_hip, 3: spine1, 4: left_knee, 5: right_knee, 6: spine2, 
+            # 7: left_ankle, 8: right_ankle, 9: spine3, 10: left_foot, 11: right_foot, 12: neck, 
+            # 13: left_collar, 14: right_collar, 15: head, 16: left_shoulder, 17: right_shoulder, 
+            # 18: left_elbow, 19: right_elbow, 20: left_wrist, 21: right_wrist
         sampling_freq = mocap_framerate // fps
         pose = data[::sampling_freq]
-        joint_used_xyz = np.array([2,3,4,5,7,8,9,10,12,13,14,15,17,18,19,21,22,25,26,27,29,30]).astype(np.int64)
-        cols = np.concatenate([np.arange(j*3, j*3+3) for j in joint_used_xyz])
-        pose = torch.from_numpy(pose[:, cols]).type(torch.float32).to(device)
+        pose = np.reshape(pose, (pose.shape[0], -1, 3))  # (sampling_freq, num_joints, 3)
+        pose = map_h36m_to_amass(pose)  # shape (frames, 22, 3)
+        # pose[:, 0, :] = 0  # Zero out root orientation
+        pose = torch.from_numpy(pose).type(torch.float32).to(device)
+        # print(f'Pose shape after selecting joints: {pose.shape}')
         rotmat = batch_rodrigues(pose.reshape(-1,1,3)).view(-1,22,3,3)
 
         # 2. Convert to Euler angles (same as AMASS)
@@ -63,7 +71,8 @@ def read_sequence(trunk_datafolder, trunk_path, folder, seq_name, fps, seqlen, o
         euler_e = rotmat2eulerzyx(rotmat[:,20:,:,:].clone().view(-1,3,3)).view(-1,2,3)
         euler = torch.cat((euler_root,euler_s,euler_shoulder,euler_elbow,euler_e), dim=1).detach().numpy()
         euler = np.delete(euler, [9,10], 1).reshape([-1,20*3])
-
+        euler[:, :3] = 0
+        
         # 3. Smooth Euler angles
         euler_smooth = euler.copy()
         for angle in range(euler.shape[1]):
