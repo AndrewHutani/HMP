@@ -228,27 +228,74 @@ class RealtimePhysMop:
         return gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion
 
     def evaluation_metrics(self, gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion):
+
+        lower_body_indices = [1, 2, 4, 5, 7, 8]
+        upper_body_indices = [0, 3, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
         gt_J = gt_J.detach().cpu().numpy()
         pred_J_data = pred_J_data.detach().cpu().numpy()
         pred_J_physics_gt = pred_J_physics_gt.detach().cpu().numpy()
         pred_J_fusion = pred_J_fusion.detach().cpu().numpy()
 
-        _, errors = compute_errors(gt_J.copy(), pred_J_data, 0)
-        error_test_data = np.array(errors).reshape([-1, config.total_length])
+        gt_J_upper = gt_J[:, upper_body_indices, :]
+        gt_J_lower = gt_J[:, lower_body_indices, :]
 
-        _, errors = compute_errors(gt_J.copy(), pred_J_physics_gt, 0)
-        error_test_physics_gt = np.array(errors).reshape([-1, config.total_length])
+        pred_J_data_upper = pred_J_data[:, upper_body_indices, :]
+        pred_J_data_lower = pred_J_data[:, lower_body_indices, :]
 
-        _, errors = compute_errors(gt_J.copy(), pred_J_fusion, 0)
-        error_test_fusion = np.array(errors).reshape([-1, config.total_length])
+        pred_J_physics_gt_upper = pred_J_physics_gt[:, upper_body_indices, :]
+        pred_J_physics_gt_lower = pred_J_physics_gt[:, lower_body_indices, :]
 
-        perjaccel = compute_error_accel_T(gt_J.copy(), pred_J_data, config.total_length, 0)
-        accel_data = (np.array(perjaccel) * constants.m2mm)
+        pred_J_fusion_upper = pred_J_fusion[:, upper_body_indices, :]
+        pred_J_fusion_lower = pred_J_fusion[:, lower_body_indices, :]
 
-        perjaccel = compute_error_accel_T(gt_J.copy(), pred_J_physics_gt, config.total_length, 0)
-        accel_physics_gt = (np.array(perjaccel) * constants.m2mm)
+        # Compute errors for upper body
+        _, errors_upper_data = compute_errors(gt_J_upper.copy(), pred_J_data_upper, 0)
+        error_test_data_upper = np.array(errors_upper_data).reshape([-1, config.total_length])
+        _, errors_upper_physics_gt = compute_errors(gt_J_upper.copy(), pred_J_physics_gt_upper, 0)
+        error_test_physics_gt_upper = np.array(errors_upper_physics_gt).reshape([-1, config.total_length])
+        _, errors_upper_fusion = compute_errors(gt_J_upper.copy(), pred_J_fusion_upper, 0)
+        error_test_fusion_upper = np.array(errors_upper_fusion).reshape([-1, config.total_length])
+
+        # Compute errors for lower body
+        _, errors_lower_data = compute_errors(gt_J_lower.copy(), pred_J_data_lower, 0)
+        error_test_data_lower = np.array(errors_lower_data).reshape([-1, config.total_length])
+        _, errors_lower_physics_gt = compute_errors(gt_J_lower.copy(), pred_J_physics_gt_lower, 0)
+        error_test_physics_gt_lower = np.array(errors_lower_physics_gt).reshape([-1, config.total_length])
+        _, errors_lower_fusion = compute_errors(gt_J_lower.copy(), pred_J_fusion_lower, 0)
+        error_test_fusion_lower = np.array(errors_lower_fusion).reshape([-1, config.total_length])
+
+        # Compute accel error for upper and lower body separately
+        perjaccel = compute_error_accel_T(gt_J_upper.copy(), pred_J_data_upper, config.total_length, 0)
+        accel_data_upper = (np.array(perjaccel) * constants.m2mm)
+
+        perjaccel = compute_error_accel_T(gt_J_upper.copy(), pred_J_physics_gt_upper, config.total_length, 0)
+        accel_physics_gt_upper = (np.array(perjaccel) * constants.m2mm)
+
+        perjaccel = compute_error_accel_T(gt_J_upper.copy(), pred_J_fusion_upper, config.total_length, 0)
+        accel_fusion_upper = (np.array(perjaccel) * constants.m2mm)
+
+        perjaccel = compute_error_accel_T(gt_J_lower.copy(), pred_J_data_lower, config.total_length, 0)
+        accel_data_lower = (np.array(perjaccel) * constants.m2mm)
+
+        perjaccel = compute_error_accel_T(gt_J_lower.copy(), pred_J_physics_gt_lower, config.total_length, 0)
+        accel_physics_gt_lower = (np.array(perjaccel) * constants.m2mm)
         
-        perjaccel = compute_error_accel_T(gt_J.copy(), pred_J_fusion, config.total_length, 0)
-        accel_fusion = (np.array(perjaccel) * constants.m2mm)
+        perjaccel = compute_error_accel_T(gt_J_lower.copy(), pred_J_fusion_lower, config.total_length, 0)
+        accel_fusion_lower = (np.array(perjaccel) * constants.m2mm)
+        
+        results = {
+            "error_test_data_upper": error_test_data_upper,
+            "error_test_physics_gt_upper": error_test_physics_gt_upper,
+            "error_test_fusion_upper": error_test_fusion_upper,
+            "error_test_data_lower": error_test_data_lower,
+            "error_test_physics_gt_lower": error_test_physics_gt_lower,
+            "error_test_fusion_lower": error_test_fusion_lower,
+            "accel_data_upper": accel_data_upper,
+            "accel_physics_gt_upper": accel_physics_gt_upper,
+            "accel_fusion_upper": accel_fusion_upper,
+            "accel_data_lower": accel_data_lower,
+            "accel_physics_gt_lower": accel_physics_gt_lower,
+            "accel_fusion_lower": accel_fusion_lower,
+        }
 
-        return error_test_data, error_test_physics_gt, error_test_fusion, accel_data, accel_physics_gt, accel_fusion
+        return results

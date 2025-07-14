@@ -7,6 +7,7 @@ from RealtimePhysMop import RealtimePhysMop
 import utils.config as config
 import torch
 from dataset.action_aware_dataset import ActionAwareDataset
+from visualize_motion import visualize_continuous_motion
 
 def get_specific_batch(data_loader, batch_index):
     """Get a specific batch by index without loading all batches into memory"""
@@ -36,22 +37,24 @@ if __name__ == "__main__":
                                 shuffle=False,
                                 num_workers=8)
     # loader = DataLoader(dataset, batch_size=1, shuffle=False)
-    mpjpe_data_all = []
-    mpjpe_physics_gt_all = []
-    mpjpe_fusion_all = []
-    accel_data_all = []
-    accel_physics_gt_all = []
-    accel_fusion_all = []
+    mpjpe_data_upper = []
+    mpjpe_physics_gt_upper = []
+    mpjpe_fusion_upper = []
+    mpjpe_data_lower = []
+    mpjpe_physics_gt_lower = []
+    mpjpe_fusion_lower = []
+
 
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
         with torch.no_grad():
             T = batch['q'].shape[1]
-            mpjpe_data_per_obs = []
-            mpjpe_physics_gt_per_obs = []
-            mpjpe_fusion_per_obs = []
-            accel_data_per_obs = []
-            accel_physics_gt_per_obs = []
-            accel_fusion_per_obs = []
+            mpjpe_data_per_obs_upper = []
+            mpjpe_physics_gt_per_obs_upper = []
+            mpjpe_fusion_per_obs_upper = []
+            mpjpe_data_per_obs_lower = []
+            mpjpe_physics_gt_per_obs_lower = []
+            mpjpe_fusion_per_obs_lower = []
+
             for i in range(config.hist_length):
                 start_idx = 24 - i
                 # Trim input to last obs_len frames
@@ -59,41 +62,51 @@ if __name__ == "__main__":
                 model_output, batch_info = realtime_model.predict(batch_trimmed)
                 gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
                 # Compute MPJPE for this observation length (example: using pred_J_fusion)
-                error_test_data, error_test_physics_gt, error_test_fusion, accel_data, accel_physics_gt, accel_fusion = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
+                eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
 
-                mpjpe_data_per_obs.append(error_test_data[0, selected_indices]) 
-                mpjpe_physics_gt_per_obs.append(error_test_physics_gt[0, selected_indices])
-                mpjpe_fusion_per_obs.append(error_test_fusion[0, selected_indices])
-                # accel_data_per_obs.append(accel_data[0, selected_indices])
-                # accel_physics_gt_per_obs.append(accel_physics_gt[0, selected_indices])
-                # accel_fusion_per_obs.append(accel_fusion[0, selected_indices])
+                mpjpe_data_per_obs_upper.append(eval_results['error_test_data_upper'][0, selected_indices]) 
+                mpjpe_physics_gt_per_obs_upper.append(eval_results['error_test_physics_gt_upper'][0, selected_indices])
+                mpjpe_fusion_per_obs_upper.append(eval_results['error_test_fusion_upper'][0, selected_indices])
+                mpjpe_data_per_obs_lower.append(eval_results['error_test_data_lower'][0, selected_indices])
+                mpjpe_physics_gt_per_obs_lower.append(eval_results['error_test_physics_gt_lower'][0, selected_indices])
+                mpjpe_fusion_per_obs_lower.append(eval_results['error_test_fusion_lower'][0, selected_indices])
 
-            mpjpe_data_all.append(mpjpe_data_per_obs) 
-            mpjpe_physics_gt_all.append(mpjpe_physics_gt_per_obs)
-            mpjpe_fusion_all.append(mpjpe_fusion_per_obs)
-            # accel_data_all.append(accel_data_per_obs)
-            # accel_physics_gt_all.append(accel_physics_gt_per_obs)
-            # accel_fusion_all.append(accel_fusion_per_obs)
 
-    mpjpe_data_all = np.array(mpjpe_data_all)  # shape: (num_samples, obs_len, 8)
-    mpjpe_physics_gt_all = np.array(mpjpe_physics_gt_all)  # shape: (num_samples, obs_len, 8)
-    mpjpe_fusion_all = np.array(mpjpe_fusion_all)  # shape: (num_samples, obs_len, 8)
+            mpjpe_data_upper.append(mpjpe_data_per_obs_upper)  # shape: (obs_len, 8)
+            mpjpe_physics_gt_upper.append(mpjpe_physics_gt_per_obs_upper)  # shape: (obs_len, 8)
+            mpjpe_fusion_upper.append(mpjpe_fusion_per_obs_upper)  # shape: (obs_len, 8)
+            mpjpe_data_lower.append(mpjpe_data_per_obs_lower)  # shape: (obs_len, 8)
+            mpjpe_physics_gt_lower.append(mpjpe_physics_gt_per_obs_lower)  # shape: (obs_len, 8)
+            mpjpe_fusion_lower.append(mpjpe_fusion_per_obs_lower)  # shape: (obs_len, 8)
 
-#         mpjpe_mean = np.mean(mpjpe_all_samples, axis=0)  # shape: (obs_len,)
+    mpjpe_data_upper = np.array(mpjpe_data_upper)  # shape: (num_samples, obs_len, 8)
+    mpjpe_physics_gt_upper = np.array(mpjpe_physics_gt_upper)  # shape: (num_samples, obs_len, 8)
+    mpjpe_fusion_upper = np.array(mpjpe_fusion_upper)  # shape: (num_samples, obs_len, 8)
+    mpjpe_data_lower = np.array(mpjpe_data_lower)  # shape: (num_samples, obs_len, 8)
+    mpjpe_physics_gt_lower = np.array(mpjpe_physics_gt_lower)  # shape: (num_samples, obs_len, 8)
+    mpjpe_fusion_lower = np.array(mpjpe_fusion_lower)  # shape: (num_samples, obs_len, 8)
+
     log_files = ["physmop_data_mpjpe_log.txt", "physmop_physics_mpjpe_log.txt", "physmop_fusion_mpjpe_log.txt"]
     for i, log_file in enumerate(log_file_handles):
         if i == 0:
-            mjpe_mean = np.mean(mpjpe_data_all, axis=0) # shape: (obs_len, 8)
+            mpjpe_mean_upper = np.mean(mpjpe_data_upper, axis=0) # shape: (obs_len, 8)
+            mpjpe_mean_lower = np.mean(mpjpe_data_lower, axis=0)  # shape: (obs_len, 8)
         elif i == 1:
-            mjpe_mean = np.mean(mpjpe_physics_gt_all, axis=0)  # shape: (obs_len, 8)
+            mpjpe_mean_upper = np.mean(mpjpe_physics_gt_upper, axis=0)
+            mpjpe_mean_lower = np.mean(mpjpe_physics_gt_lower, axis=0)
         else:
-            mjpe_mean = np.mean(mpjpe_fusion_all, axis=0)  # shape: (obs_len, 8)
+            mpjpe_mean_upper = np.mean(mpjpe_fusion_upper, axis=0)
+            mpjpe_mean_lower = np.mean(mpjpe_fusion_lower, axis=0)
 
         # Write to log file
 
-        log_file.write(f"Averaged MPJPE for each observation length and each selected timestep:\n")
-        for obs_len in range(mjpe_mean.shape[0]):
-            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mjpe_mean[obs_len]]) + "]\n")
+        log_file.write(f"Averaged MPJPE (upper body) for each observation length and each selected timestep:\n")
+        for obs_len in range(mpjpe_mean_upper.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mpjpe_mean_upper[obs_len]]) + "]\n")
+        log_file.write("\n")
+        log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep:\n")
+        for obs_len in range(mpjpe_mean_lower.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mpjpe_mean_lower[obs_len]]) + "]\n")
         log_file.write("\n")
 
     # Close all log files at the end
