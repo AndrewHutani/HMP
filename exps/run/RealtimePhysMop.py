@@ -194,6 +194,7 @@ class RealtimePhysMop:
         pred_vertices_fusion, pred_joints_fusion, pred_joints_smpl_fusion, _ = self.forward_kinematics(pred_pose_fusion, gt_shape, gt_gender_id, process_size_test, joints_smpl=True, vertices=True)
 
         if config.test_mode == 'H36M':
+            print("H36M dataset detected, adjusting joint indices for evaluation.")
             gt_J = torch.cat([gt_joints, gt_joints[:, 8:9], gt_joints[:, 8:9],
                             gt_joints[:, 13:14], gt_joints[:, 16:17],
                             gt_joints_smpl[:, 22:23], gt_joints_smpl[:, 22:23], gt_joints_smpl[:, 22:23], 

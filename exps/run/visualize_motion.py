@@ -18,31 +18,10 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
     axes_limit = 2
     # Define the connections between joints (skeleton structure)
     connections = [
-        # Spine/Torso
-        (0, 7),   # Hip to Spine
-        (7, 8),   # Spine to Thorax  
-        (8, 9),   # Thorax to Neck/Nose
-        (9, 10),  # Neck to Head
-        
-        # Right leg
-        (0, 1),   # Hip to RHip
-        (1, 2),   # RHip to RKnee
-        (2, 3),   # RKnee to RFoot
-        
-        # Left leg  
-        (0, 4),   # Hip to LHip
-        (4, 5),   # LHip to LKnee
-        (5, 6),   # LKnee to LFoot
-        
-        # Right arm
-        (8, 14),  # Thorax to RShoulder
-        (14, 15), # RShoulder to RElbow
-        (15, 16), # RElbow to RWrist
-        
-        # Left arm
-        (8, 11),  # Thorax to LShoulder
-        (11, 12), # LShoulder to LElbow
-        (12, 13), # LElbow to LWrist
+        (2, 3), (5, 6),           # legs
+        (7, 8), (8, 9), (9, 10),  # spine/head
+        (8, 11), (11, 12), (12, 13), # left arm
+        (8, 14), (14, 15), (15, 16)  # right arm
     ]
 
     # connections = [
@@ -70,16 +49,16 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         ax.set_title(f"Frame {frame_idx}: {motion_sequence[frame_idx, 0]}")
 
         joints = motion_sequence[frame_idx]
-        ax.scatter(joints[:, 0], joints[:, 2], joints[:, 1], c='r', marker='o')
+        ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2], c='r', marker='o')
 
          # Add joint indices as text annotations
-        for joint_idx, (x, z, y) in enumerate(joints):
+        for joint_idx, (x, y, z) in enumerate(joints):
             ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
-        for connection in connections:
-            joint1, joint2 = connection
-            ax.plot([joints[joint1, 0], joints[joint2, 0]],
-                    [joints[joint1, 2], joints[joint2, 2]],
-                    [joints[joint1, 1], joints[joint2, 1]], 'r', alpha=0.5)
+        # for connection in connections:
+        #     joint1, joint2 = connection
+        #     ax.plot([joints[joint1, 0], joints[joint2, 0]],
+        #             [joints[joint1, 2], joints[joint2, 2]],
+        #             [joints[joint1, 1], joints[joint2, 1]], 'r', alpha=0.5)
 
         plt.pause(0.5)  # Adjust the pause duration for smoother animation
 

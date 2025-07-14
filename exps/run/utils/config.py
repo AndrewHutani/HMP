@@ -26,9 +26,9 @@ DATASET_VALID_PATH = {
                   }
 
 DATASET_FOLDERS_TEST = {
-                    'H36M': 'data/data_processed/h36m_test_%d.pkl' % total_length,
+                    # 'H36M': 'data/data_processed/h36m_test_%d.pkl' % total_length,
                     # 'PW3D':  './dataset/data_processed/pw3d_test_%d.pkl' % total_length,
-                    # 'AMASS':  './dataset/data_processed/amass_test_%d.pkl' % total_length,
+                    'AMASS':  'data/data_processed/amass_test_%d.pkl' % total_length,
                 }
 
 partition = [1.]
@@ -38,7 +38,7 @@ SMPLH_N_PATH = 'data/smpl_official/neutral/model.npz'
 SMPLH_M_PATH = 'data/smpl_official/male/model.npz'
 SMPLH_F_PATH = 'data/smpl_official/female/model.npz'
 
-test_mode = 'H36M' # 'H36M' 
+test_mode = 'AMASS' # 'H36M' 
 
 
 
