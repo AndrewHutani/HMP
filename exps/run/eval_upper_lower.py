@@ -68,12 +68,12 @@ colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 
 plt.figure(figsize=(10,6))
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(lower_data[:, i], label=f"{label} (Data)", color=colors[i], linestyle='--')
-    plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
-    plt.plot(lower_fusion[:, i], label=f"{label} (Fusion)", color=colors[i], linestyle='-')
+    plt.plot(upper_fusion[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
+    plt.plot(lower_fusion[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
+    # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Absolute MPJPE (mm)")
-plt.title("Absolute MPJPE for Lower body vs. Observed Frames")
+plt.title("Absolute MPJPE for the Fusion Branch vs. Observed Frames")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
@@ -82,9 +82,9 @@ third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label
 fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
 
 # Second legend
-line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Fusion")
-line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Data")
-line_dotted = Line2D([], [], color='black', linestyle='-.', linewidth=1.5, label="Physics")
+line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Upper")
+line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Lower")
+# line_dotted = Line2D([], [], color='black', linestyle='-.', linewidth=1.5, label="Physics")
 
 
 # first_legend = plt.legend(handles=[first_line, second_line, third_line, fourth_line], loc='upper right', 
@@ -97,11 +97,11 @@ line_dotted = Line2D([], [], color='black', linestyle='-.', linewidth=1.5, label
 # Combine all handles and labels into one legend
 all_handles = [
     first_line, second_line, third_line, fourth_line,  # Timesteps/colors
-    line_solid, line_dashed, line_dotted               # Line types
+    line_solid, line_dashed, #line_dotted               # Line types
 ]
 all_labels = [
     '80ms', '400ms', '560ms', '1000ms',               # Timesteps/colors
-    'Fusion', 'Data', 'Physics'                       # Line types
+    'Upper', 'Lower', #'Physics'                       # Line types
 ]
 
 plt.legend(
