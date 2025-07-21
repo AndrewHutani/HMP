@@ -12,42 +12,64 @@ from matplotlib import cm
 from matplotlib.animation import FuncAnimation
 
 class RealTimeGlobalPrediction(RealTimePrediction):
-    def add_global_translation(self, root_translation=None):
-        """
-        Add global translation to the predicted motion based on the root translation.
+    # def add_global_translation(self, root_translation=None):
+    #     """
+    #     Add global translation to the predicted motion based on the root translation.
 
-        :param root_translation: Optional; if provided, will use this translation instead of calculating it. tensor([num_frames, 32, 3])
-        """
-        global_observed_motion = []
-        if root_translation is None:
-            CONSTANT_VELOCITY = 0.03  # Adjust this value as needed
+    #     :param root_translation: Optional; if provided, will use this translation instead of calculating it. tensor([num_frames, 32, 3])
+    #     """
+    #     global_observed_motion = []
+    #     if root_translation is None:
+    #         CONSTANT_VELOCITY = 0.03  # Adjust this value as needed
             
-            # observed_motion: list of torch tensors, each [num_joints, 3]
-            offsets = torch.arange(len(self.observed_motion), dtype=self.observed_motion[0].dtype, device=self.observed_motion[0].device) * CONSTANT_VELOCITY
+    #         # observed_motion: list of torch tensors, each [num_joints, 3]
+    #         offsets = torch.arange(len(self.observed_motion), dtype=self.observed_motion[0].dtype, device=self.observed_motion[0].device) * CONSTANT_VELOCITY
             
-            for i in range(len(self.observed_motion)):
-                frame = self.observed_motion[i].clone()  # Clone to avoid modifying the original
-                frame[:, 2] += offsets[i]                # Add offset to the z-coordinate
-                global_observed_motion.append(frame)
+    #         for i in range(len(self.observed_motion)):
+    #             frame = self.observed_motion[i].clone()  # Clone to avoid modifying the original
+    #             frame[:, 2] += offsets[i]                # Add offset to the z-coordinate
+    #             global_observed_motion.append(frame)
                     
-            timesteps = self.predicted_motion.shape[0] + len(self.observed_motion)
+    #         timesteps = self.predicted_motion.shape[0] + len(self.observed_motion)
 
-            offsets = np.arange(timesteps) * CONSTANT_VELOCITY
+    #         offsets = np.arange(timesteps) * CONSTANT_VELOCITY
 
-            offsets = offsets.reshape(-1, 1)  # Reshape to [timesteps, 1]
+    #         offsets = offsets.reshape(-1, 1)  # Reshape to [timesteps, 1]
             
 
-            for i in range(self.predicted_motion.shape[0]):
-                self.predicted_motion[i, :, 2] += offsets[len(self.observed_motion) + i]
+    #         for i in range(self.predicted_motion.shape[0]):
+    #             self.predicted_motion[i, :, 2] += offsets[len(self.observed_motion) + i]
 
-        else:
-            root_translation_observed = root_translation[:len(self.observed_motion), :, :]  # shape: (num_frames, 32, 3)
-            for i in range(len(self.observed_motion)):
-                global_observed_motion.append(self.observed_motion[i] + root_translation_observed[i])  # Add root translation to each observed frame
+    #     else:
+    #         root_translation_observed = root_translation[:len(self.observed_motion), :, :]  # shape: (num_frames, 32, 3)
+    #         for i in range(len(self.observed_motion)):
+    #             global_observed_motion.append(self.observed_motion[i] + root_translation_observed[i])  # Add root translation to each observed frame
             
-            for i in range(self.predicted_motion.shape[0]):
-                self.predicted_motion[i] += root_translation[len(self.observed_motion) + i].cpu().numpy()
+    #         for i in range(self.predicted_motion.shape[0]):
+    #             self.predicted_motion[i] += root_translation[len(self.observed_motion) + i].cpu().numpy()
             
+
+    #     return global_observed_motion
+    def add_global_translation(self):
+        CONSTANT_VELOCITY = 0.03  # Adjust this value as needed
+        
+        # observed_motion: list of torch tensors, each [num_joints, 3]
+        offsets = torch.arange(len(self.observed_motion), dtype=self.observed_motion[0].dtype, device=self.observed_motion[0].device) * CONSTANT_VELOCITY
+        global_observed_motion = []
+        for i in range(len(self.observed_motion)):
+            frame = self.observed_motion[i].clone()  # Clone to avoid modifying the original
+            frame[:, 2] += offsets[i]                # Add offset to the z-coordinate
+            global_observed_motion.append(frame)
+                
+        timesteps = self.predicted_motion.shape[0] + len(self.observed_motion)
+
+        offsets = np.arange(timesteps) * CONSTANT_VELOCITY
+
+        offsets = offsets.reshape(-1, 1)  # Reshape to [timesteps, 1]
+        
+
+        for i in range(self.predicted_motion.shape[0]):
+            self.predicted_motion[i, :, 2] += offsets[len(self.observed_motion) + i]
 
         return global_observed_motion
 
@@ -58,8 +80,9 @@ args = parser.parse_args()
 
 # Prepare model
 model = Model(config, args.dyna)
-state_dict = torch.load(args.model_pth)
+state_dict = torch.load(args.model_pth, map_location = torch.device("cpu"))
 model.load_state_dict(state_dict, strict=True)
+model.to(torch.device("cpu"))  # Use CPU for inference
 
 
 actions = ["walking", "eating", "smoking", "discussion", "directions",
@@ -72,9 +95,9 @@ action = "walking"  # Change this to the action you want to evaluate
 config.motion.h36m_target_length = config.motion.h36m_target_length_eval
 dataset = H36MEval(config, 'test')
 walking_sample, root_sample = dataset.get_full_sequences_for_action(action)[0]
-print("Walking sample shape: ", walking_sample.shape)
-print("Root sample shape: ", root_sample.shape)
-print("Root sample: ", root_sample[:, 0, :])
+# print("Walking sample shape: ", walking_sample.shape)
+# print("Root sample shape: ", root_sample.shape)
+# print("Root sample: ", root_sample[:, 0, :])
 
 realtime_predictor = RealTimeGlobalPrediction(model, config, tau=0.5)
 visualize = False
@@ -89,7 +112,7 @@ for i in range(100):
     test_input_ = walking_sample[i]
     ground_truth = walking_sample[i:i+config.motion.h36m_target_length]
     realtime_predictor.predict(test_input_, ground_truth, visualize, debug)
-    global_observed_motion = realtime_predictor.add_global_translation(root_translation=root_sample[i:])  # Add global translation to the predicted motion
+    global_observed_motion = realtime_predictor.add_global_translation()  # Add global translation to the predicted motion
 
     all_observed_motion.append(global_observed_motion[-config.motion.h36m_target_length:])
     all_predicted_motion.append(realtime_predictor.predicted_motion)

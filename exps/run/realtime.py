@@ -15,8 +15,8 @@ class RealTimePrediction():
 
         self.model = model
         self.model.eval()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # print(f"Using device: {self.device}")
+        self.device = torch.device("cpu")
+        print(f"Using device: {self.device}")
         self.model.to(self.device)
         self.joint_used_xyz = np.array([2,3,4,5,7,8,9,10,12,13,14,15,17,18,19,21,22,25,26,27,29,30]).astype(np.int64)
         self.joint_to_ignore = np.array([16, 20, 23, 24, 28, 31]).astype(np.int64)
@@ -244,7 +244,7 @@ class RealTimePrediction():
                     w = np.sqrt(1 / N)
                 dct_m[k, i] = w * np.cos(np.pi * (i + 1 / 2) * k / N)
         idct_m = np.linalg.inv(dct_m)
-        return torch.tensor(dct_m).float().cuda(), torch.tensor(idct_m).float().cuda()
+        return torch.tensor(dct_m).float().to(self.device), torch.tensor(idct_m).float().to(self.device)
 
     def predict(self, observed_motion, ground_truth, visualize=False, debug=False):
         self.observed_motion.append(observed_motion)
@@ -267,7 +267,7 @@ class RealTimePrediction():
         input_length = self.config.motion.h36m_input_length_dct
         if debug:
             print("Stacked observed motion shape:", torch.stack(self.observed_motion).shape)
-        observed_motion = torch.stack(self.observed_motion).cuda()
+        observed_motion = torch.stack(self.observed_motion).to(self.device)
         n, c, _ = observed_motion.shape  # n: number of timesteps, c: number of joints
         # Prepare input
         motion_input = observed_motion[:, self.joint_used_xyz, :].reshape(n, -1)  # Shape: [n, len(joint_used_xyz) * 3]
@@ -331,7 +331,7 @@ class RealTimePrediction():
         
         t1 = time.time()
         # if debug:
-        # print(f"Prediction time: {t1 - t0:.2f} seconds")
+        print(f"Prediction time: {t1 - t0:.2f} seconds")
 
     def evaluate(self):
         """

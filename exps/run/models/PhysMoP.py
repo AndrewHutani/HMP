@@ -14,6 +14,8 @@ from utils.utils import remove_singlular_batch, smoothness_constraint
 import utils.config as config
 import utils.constants as constants
 
+import time
+
 class Fusion(nn.Module):
     def __init__(self):
         super(Fusion, self).__init__()
@@ -143,7 +145,7 @@ class Regression(nn.Module):
         return pred_q_ddot
 
     def forward(self, motion_input, gt_motion, mode, fusion=True):
-        
+        t0 = time.perf_counter()
         # Feature extraction (?)
         motion_feats = self.motion_fc_in(motion_input)
         motion_feats = self.arr0(motion_feats)
@@ -153,10 +155,12 @@ class Regression(nn.Module):
         B, N, D = motion_feats.shape
         ## data-driven 
         motion_pred_data = torch.zeros([B, config.total_length, D]).float().to(motion_input.device)
-        if self.data:
+        if self.data or fusion:
             motion_pred_data[:, :config.hist_length] = motion_input
             motion_pred_data[:, config.hist_length:] = self.motion_fc_out(motion_feats) + motion_pred_data[:, config.hist_length-1:config.hist_length]
-
+            t1 = time.perf_counter()
+            print(f"Data-driven prediction time: {t1-t0} seconds")
+        
         ## physics-driven and fusion
         pred_q_ddot_physics_gt = torch.zeros([B, config.total_length-2, D]).float().to(motion_input.device)
         motion_pred_physics_gt = torch.zeros([B, config.total_length, D]).float().to(motion_input.device)
@@ -173,22 +177,28 @@ class Regression(nn.Module):
         motion_pred_physics_pred[:, :config.hist_length] = motion_input[:, :config.hist_length].clone()
         motion_pred_fusion[:, :config.hist_length] = motion_input[:, :config.hist_length].clone()
 
-        for t in range(config.total_length-3):
-            ## physics gt history
-            if self.physics and mode=='train':
-                pred_q_ddot_physics_gt[:, t+1] = self.physics_forward(motion_feats_all.clone(), gt_motion[:, t:t+3], B, D)
-                motion_pred_physics_gt[:, t+3] = 2*gt_motion[:, t+2] - gt_motion[:, t+1] + pred_q_ddot_physics_gt[:, t+1].clone() * constants.dt**2                
+        if self.physics or fusion:
+            for t in range(config.total_length-3):
+                
+                ## physics gt history
+                if self.physics and mode=='train':
+                    pred_q_ddot_physics_gt[:, t+1] = self.physics_forward(motion_feats_all.clone(), gt_motion[:, t:t+3], B, D)
+                    motion_pred_physics_gt[:, t+3] = 2*gt_motion[:, t+2] - gt_motion[:, t+1] + pred_q_ddot_physics_gt[:, t+1].clone() * constants.dt**2                
 
-            if t > config.hist_length-4:
-                ## physics pred history
-                if mode=='train' and not fusion:
-                    pred_q_ddot_physics_pred = pred_q_ddot_physics_gt
-                    motion_pred_physics_pred = motion_pred_physics_gt
-                else:
-                    pred_q_ddot_physics_pred[:, t+1] = self.physics_forward(motion_feats_all.clone(), motion_pred_physics_pred[:, t:t+3], B, D)
-                    motion_pred_physics_pred[:, t+3] = 2*motion_pred_physics_pred[:, t+2] - motion_pred_physics_pred[:, t+1] + pred_q_ddot_physics_pred[:, t+1].clone() * constants.dt**2
+                if t > config.hist_length-4:
+                    ## physics pred history
+                    if mode=='train' and not fusion:
+                        pred_q_ddot_physics_pred = pred_q_ddot_physics_gt
+                        motion_pred_physics_pred = motion_pred_physics_gt
+                    else:
+                        pred_q_ddot_physics_pred[:, t+1] = self.physics_forward(motion_feats_all.clone(), motion_pred_physics_pred[:, t:t+3], B, D)
+                        motion_pred_physics_pred[:, t+3] = 2*motion_pred_physics_pred[:, t+2] - motion_pred_physics_pred[:, t+1] + pred_q_ddot_physics_pred[:, t+1].clone() * constants.dt**2
+            t1 = time.perf_counter()
+            print(f"Physics prediction time: {t1-t0} seconds")
+
         ## fusion
         if fusion:
+            t0 = time.perf_counter()
             time_idx = torch.arange(config.pred_length).float().to(motion_input.device).expand(B, -1) / config.pred_length
             weight_t = torch.tanh(self.fusion_net(motion_pred_data[:, config.hist_length:].clone().detach(), motion_pred_physics_pred[:, config.hist_length:].clone().detach(), motion_feats.clone().detach(), time_idx.clone().detach())) ** 2
 
@@ -200,6 +210,8 @@ class Regression(nn.Module):
 
                     motion_pred_fusion[:, t+3] = (1-weight_t[:, t+3-config.hist_length]) * motion_pred_fusion_t + weight_t[:, t+3-config.hist_length] * motion_pred_data[:, t+3]
                     # motion_pred_fusion[:, t+3] = 0.5 * motion_pred_fusion_t + 0.5 * motion_pred_data[:, t+3]
+            t1 = time.perf_counter()
+            print(f"Fusion prediction time: {t1-t0} seconds")
         else:
             weight_t = torch.FloatTensor(1).fill_(0.).to(motion_input.device)
         return motion_pred_data, motion_pred_physics_gt, motion_pred_physics_pred, motion_pred_fusion, pred_q_ddot_physics_gt, weight_t

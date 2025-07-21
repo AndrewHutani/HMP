@@ -6,11 +6,12 @@ from visualize_motion import visualize_motion_with_ground_truth, visualize_conti
 from dataset.base_dataset_test import BaseDataset_test
 
 import utils.config as config
+from torchviz import make_dot
 
 
-ds = "H36M" 
+ds = "AMASS" 
 if __name__ == "__main__":
-    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
+    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cuda')
     # Option 2: Load only walking data
     # print("\n=== Loading walking data only ===")
     # walking_dataset = ActionAwareDataset(
