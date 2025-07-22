@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 
 import time
 
+from prediction_times import prediction_times
+
 class RealTimePrediction():
     def __init__(self, model, config, tau):
         self.config = config
@@ -263,7 +265,6 @@ class RealTimePrediction():
         return self.observed_motion
 
     def regress_pred(self, visualize=False, debug=False):
-        t0 = time.time()
         input_length = self.config.motion.h36m_input_length_dct
         if debug:
             print("Stacked observed motion shape:", torch.stack(self.observed_motion).shape)
@@ -289,6 +290,7 @@ class RealTimePrediction():
         else:
             num_prediction_chunks = self.total_prediction_horizon // chunk_prediction_length + 1
         
+        t0 = time.perf_counter()
         for idx in range(num_prediction_chunks):
             motion_input = motion_window[:, self.joint_used_xyz, :].reshape(1, input_length, -1)
             with torch.no_grad():
@@ -297,24 +299,25 @@ class RealTimePrediction():
                 else:
                     motion_input_ = motion_input
 
-            output = self.model(motion_input_, self.tau)
-            output = torch.matmul(self.idct_m[:, :, :config.motion.h36m_input_length], output)[:, :chunk_prediction_length, :]
+                output = self.model(motion_input_, self.tau)
+                output = torch.matmul(self.idct_m[:, :, :config.motion.h36m_input_length], output)[:, :chunk_prediction_length, :]
 
-            if config.deriv_output:
-                output = output + motion_input[:, -1:, :].repeat(1,chunk_prediction_length,1)
+                if config.deriv_output:
+                    output = output + motion_input[:, -1:, :].repeat(1,chunk_prediction_length,1)
 
-            output = output.reshape(chunk_prediction_length, -1, 3)  # [prediction_horizon, 22, 3]
+                output = output.reshape(chunk_prediction_length, -1, 3)  # [prediction_horizon, 22, 3]
 
-            # Fill in the predicted joints into a full skeleton
-            motion_pred = motion_window[-1].unsqueeze(0).repeat(chunk_prediction_length, 1, 1)
-            motion_pred[:, self.joint_used_xyz, :] = output
-            motion_pred[:, self.joint_to_ignore, :] = motion_pred[:, self.joint_equal, :]
+                # Fill in the predicted joints into a full skeleton
+                motion_pred = motion_window[-1].unsqueeze(0).repeat(chunk_prediction_length, 1, 1)
+                motion_pred[:, self.joint_used_xyz, :] = output
+                motion_pred[:, self.joint_to_ignore, :] = motion_pred[:, self.joint_equal, :]
 
-            outputs.append(motion_pred)
+                outputs.append(motion_pred)
 
-            # Slide the window: remove first 'step' frames, append new predictions
-            motion_window = torch.cat([motion_window[chunk_prediction_length:], motion_pred], dim=0)
-
+                # Slide the window: remove first 'step' frames, append new predictions
+                motion_window = torch.cat([motion_window[chunk_prediction_length:], motion_pred], dim=0)
+        t1 = time.perf_counter()
+        prediction_times.append(t1 - t0)
         # Concatenate all predictions
         predictions = torch.cat(outputs, dim=0)[:self.total_prediction_horizon]  # [target_length, 32, 3]
 
@@ -329,9 +332,9 @@ class RealTimePrediction():
             self.visualize_motion(self.predicted_motion, self.ground_truth, title="Predicted Motion")
             # np.save("realtime_predictions.npy", output.cpu())
         
-        t1 = time.time()
+        # t1 = time.time()
         # if debug:
-        print(f"Prediction time: {t1 - t0:.2f} seconds")
+        # print(f"Prediction time: {t1 - t0:.2f} seconds")
 
     def evaluate(self):
         """

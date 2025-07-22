@@ -1,3 +1,4 @@
+import time
 import torch
 import numpy as np
 import argparse
@@ -10,6 +11,7 @@ from datasets.h36m_eval import H36MEval
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.animation import FuncAnimation
+from prediction_times import prediction_times
 
 class RealTimeGlobalPrediction(RealTimePrediction):
     # def add_global_translation(self, root_translation=None):
@@ -106,16 +108,25 @@ debug = False
 
 all_observed_motion = []
 all_predicted_motion = []
+latency_times = []
 
-# for i in range(walking_sample.shape[0] - config.motion.h36m_target_length):
-for i in range(100):
+for i in range(walking_sample.shape[0] - config.motion.h36m_target_length):
+# for i in range(100):
     test_input_ = walking_sample[i]
     ground_truth = walking_sample[i:i+config.motion.h36m_target_length]
+    t0 = time.perf_counter()
     realtime_predictor.predict(test_input_, ground_truth, visualize, debug)
+    t1 = time.perf_counter()
     global_observed_motion = realtime_predictor.add_global_translation()  # Add global translation to the predicted motion
 
     all_observed_motion.append(global_observed_motion[-config.motion.h36m_target_length:])
     all_predicted_motion.append(realtime_predictor.predicted_motion)
+    latency_times.append(t1 - t0)
+
+if prediction_times:
+    avg_prediction_time = sum(prediction_times) / len(prediction_times)
+    print(f"Average prediction time: {avg_prediction_time:.4f} seconds")
+    
 
 fig = plt.figure(figsize=(16, 9))
 ax = fig.add_subplot(111, projection='3d')
