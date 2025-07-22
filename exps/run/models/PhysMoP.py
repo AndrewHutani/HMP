@@ -15,6 +15,7 @@ import utils.config as config
 import utils.constants as constants
 
 import time
+from prediction_times import prediction_times
 
 class Fusion(nn.Module):
     def __init__(self):
@@ -158,8 +159,9 @@ class Regression(nn.Module):
         if self.data or fusion:
             motion_pred_data[:, :config.hist_length] = motion_input
             motion_pred_data[:, config.hist_length:] = self.motion_fc_out(motion_feats) + motion_pred_data[:, config.hist_length-1:config.hist_length]
-            t1 = time.perf_counter()
-            print(f"Data-driven prediction time: {t1-t0} seconds")
+            # t1 = time.perf_counter()
+            # print(f"Data-driven prediction time: {t1-t0} seconds")
+            # prediction_times.append(t1-t0)  # Store the prediction time
         
         ## physics-driven and fusion
         pred_q_ddot_physics_gt = torch.zeros([B, config.total_length-2, D]).float().to(motion_input.device)
@@ -193,8 +195,9 @@ class Regression(nn.Module):
                     else:
                         pred_q_ddot_physics_pred[:, t+1] = self.physics_forward(motion_feats_all.clone(), motion_pred_physics_pred[:, t:t+3], B, D)
                         motion_pred_physics_pred[:, t+3] = 2*motion_pred_physics_pred[:, t+2] - motion_pred_physics_pred[:, t+1] + pred_q_ddot_physics_pred[:, t+1].clone() * constants.dt**2
-            t1 = time.perf_counter()
-            print(f"Physics prediction time: {t1-t0} seconds")
+            # t1 = time.perf_counter()
+            # print(f"Physics prediction time: {t1-t0} seconds")
+            # prediction_times.append(t1-t0)
 
         ## fusion
         if fusion:
@@ -210,8 +213,9 @@ class Regression(nn.Module):
 
                     motion_pred_fusion[:, t+3] = (1-weight_t[:, t+3-config.hist_length]) * motion_pred_fusion_t + weight_t[:, t+3-config.hist_length] * motion_pred_data[:, t+3]
                     # motion_pred_fusion[:, t+3] = 0.5 * motion_pred_fusion_t + 0.5 * motion_pred_data[:, t+3]
-            t1 = time.perf_counter()
-            print(f"Fusion prediction time: {t1-t0} seconds")
+            # t1 = time.perf_counter()
+            # print(f"Fusion prediction time: {t1-t0} seconds")
+            # prediction_times.append(t1-t0)
         else:
             weight_t = torch.FloatTensor(1).fill_(0.).to(motion_input.device)
         return motion_pred_data, motion_pred_physics_gt, motion_pred_physics_pred, motion_pred_fusion, pred_q_ddot_physics_gt, weight_t

@@ -73,12 +73,12 @@ class GCBlock(nn.Module):
             skl = torch.tensor(skl, dtype=torch.float32, requires_grad=False)
             bi_skl = torch.zeros(22, 22, requires_grad=False)
             bi_skl[skl != 0] = 1.
-            self.skl_mask = bi_skl.cuda()
+            self.skl_mask = bi_skl.cpu()
 
             self.adj_j = nn.Parameter(torch.eye(22, 22))
 
             self.traj_mask = (torch.tril(torch.ones(seq, seq, requires_grad=False), 1) * torch.triu(
-                torch.ones(seq, seq, requires_grad=False), -1)).cuda()  # 三对角矩阵
+                torch.ones(seq, seq, requires_grad=False), -1)).cpu()  # 三对角矩阵
             for j in range(seq):
                 self.traj_mask[j, j] = 0.
             self.adj_t = nn.Parameter(torch.zeros(seq, seq))
@@ -138,13 +138,13 @@ class GCBlock(nn.Module):
         if if_make_dynamic:
             gate = nn.functional.gumbel_softmax(prob, tau=tau, hard=True)
         else:
-            gate = torch.tensor([1., 0., 0., 0.]).unsqueeze(0).expand(x.shape[0], -1).cuda()
+            gate = torch.tensor([1., 0., 0., 0.]).unsqueeze(0).expand(x.shape[0], -1).cpu()
 
 
         x2 = x2.unsqueeze(1)    # [bs,1,66,50]
         x3 = x3.unsqueeze(1)
         x4 = x4.unsqueeze(1)
-        x_opts = torch.cat([torch.zeros_like(x1).cuda().unsqueeze(1), x2, x3, x4], dim=1)   # [bs,4,66,50]
+        x_opts = torch.cat([torch.zeros_like(x1).cpu().unsqueeze(1), x2, x3, x4], dim=1)   # [bs,4,66,50]
 
 
 

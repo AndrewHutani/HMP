@@ -8,7 +8,7 @@ from datasets.h36m_eval import H36MEval
 import torch
 from utils.misc import expmap2rotmat_torch, find_indices_256, find_indices_srnn, rotmat2xyz_torch
 
-def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visualization"):
+def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visualization", skeleton_type = None):
     """
     Visualize a continuous motion sequence in 3D.
 
@@ -19,15 +19,15 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
     # Define the connections between joints (skeleton structure)
     amass_connections = [
         # Spine/Torso/Head
-        (0, 3), (3,6), (6, 9), (9, 12), (12, 15),
+        (0, 3), (3,6), (6, 9), (9, 12),
         #Left leg
-        (0, 1), (1, 4), (4, 7), (7, 10),
+        (0, 1), (1, 4), (4, 7),
         # Right leg
-        (0, 2), (2, 5), (5, 8), (8, 11),
+        (0, 2), (2, 5), (5, 8),
         # Left arm
-        (9, 13), (13, 16), (16, 18), (18, 20),
+        (6, 10), (10, 13), (13, 15), (15, 17),
         # Right arm
-        (9, 14), (14, 17), (17, 19), (19, 21)
+        (6, 11), (11, 14), (14, 16), (16, 18)
     ]
 
     h36m_connections = [
@@ -39,6 +39,10 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         (24, 25), (25, 26), (26, 27), (27, 28), 
         (28, 29), (29, 30), (30, 31)
     ]
+    if skeleton_type == 'h36m':
+        connections = h36m_connections
+    elif skeleton_type == 'amass':
+        connections = amass_connections
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -57,16 +61,19 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         joints = motion_sequence[frame_idx]
         ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2], c='r', marker='o')
 
-         # Add joint indices as text annotations
-        for joint_idx, (x, y, z) in enumerate(joints):
-            ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
-        # for connection in amass_connections:
-        #     joint1, joint2 = connection
-        #     ax.plot([joints[joint1, 0], joints[joint2, 0]],
-        #             [joints[joint1, 2], joints[joint2, 2]],
-        #             [joints[joint1, 1], joints[joint2, 1]], 'r', alpha=0.5)
-
-        plt.pause(0.5)  # Adjust the pause duration for smoother animation
+        if skeleton_type != None:
+            # Draw skeleton connections
+            for connection in connections:
+                joint1, joint2 = connection
+                ax.plot([joints[joint1, 0], joints[joint2, 0]],
+                        [joints[joint1, 1], joints[joint2, 1]],
+                        [joints[joint1, 2], joints[joint2, 2]], 'r', alpha=0.5)
+        else:
+            # Add joint indices as text annotations
+            for joint_idx, (x, y, z) in enumerate(joints):
+                ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)        
+        
+        plt.pause(0.1)  # Adjust the pause duration for smoother animation
 
     plt.show()
 
