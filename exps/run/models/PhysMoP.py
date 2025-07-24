@@ -146,12 +146,15 @@ class Regression(nn.Module):
         return pred_q_ddot
 
     def forward(self, motion_input, gt_motion, mode, fusion=True):
+        pred_time =[]
         t0 = time.perf_counter()
         # Feature extraction (?)
         motion_feats = self.motion_fc_in(motion_input)
         motion_feats = self.arr0(motion_feats)
         motion_feats = self.motion_mlp(motion_feats)
         motion_feats = self.arr1(motion_feats)
+        t1 = time.perf_counter()
+        pred_time.append(t1-t0)
 
         B, N, D = motion_feats.shape
         ## data-driven 
@@ -159,7 +162,8 @@ class Regression(nn.Module):
         if self.data or fusion:
             motion_pred_data[:, :config.hist_length] = motion_input
             motion_pred_data[:, config.hist_length:] = self.motion_fc_out(motion_feats) + motion_pred_data[:, config.hist_length-1:config.hist_length]
-            # t1 = time.perf_counter()
+            t2 = time.perf_counter()
+            pred_time.append(t2-t1)
             # print(f"Data-driven prediction time: {t1-t0} seconds")
             # prediction_times.append(t1-t0)  # Store the prediction time
         
@@ -169,9 +173,7 @@ class Regression(nn.Module):
         pred_q_ddot_physics_pred = torch.zeros([B, config.total_length-2, D]).float().to(motion_input.device)
         motion_pred_physics_pred = torch.zeros([B, config.total_length, D]).float().to(motion_input.device)
 
-        motion_pred_fusion = torch.zeros([B, config.total_length, D]).float().to(motion_input.device)
-
-        motion_feats_all = self.motion_feats_fc(motion_feats.reshape([B, N*D]))
+        motion_pred_fusion = torch.zeros([B, config.total_length, D]).float().to(motion_input.device)       
 
         # fusion_weights = torch.tanh(self.fusion_net(motion_feats.reshape([B, N*D]))) ** 2
 
@@ -180,6 +182,10 @@ class Regression(nn.Module):
         motion_pred_fusion[:, :config.hist_length] = motion_input[:, :config.hist_length].clone()
 
         if self.physics or fusion:
+            t3 = time.perf_counter()
+            motion_feats_all = self.motion_feats_fc(motion_feats.reshape([B, N*D]))
+            t4 = time.perf_counter()
+            pred_time.append(t4-t3)
             for t in range(config.total_length-3):
                 
                 ## physics gt history
@@ -218,6 +224,7 @@ class Regression(nn.Module):
             # prediction_times.append(t1-t0)
         else:
             weight_t = torch.FloatTensor(1).fill_(0.).to(motion_input.device)
+        prediction_times.append(pred_time)
         return motion_pred_data, motion_pred_physics_gt, motion_pred_physics_pred, motion_pred_fusion, pred_q_ddot_physics_gt, weight_t
 
 class PhysMoP(nn.Module):

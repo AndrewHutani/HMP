@@ -58,4 +58,8 @@ if __name__ == "__main__":
         print(f"Average latency for processing {batch_idx + 1} samples: {avg_latency:.4f} seconds")
         jitter = np.std(latency_times)
         print(f"Jitter in latency: {jitter:.6f} seconds")
+        if prediction_times:
+            prediction_times = np.array(prediction_times)
+            avg_prediction_times = np.mean(prediction_times, axis=0)
+            print(f"Average prediction times: {avg_prediction_times}")
         break

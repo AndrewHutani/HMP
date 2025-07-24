@@ -37,8 +37,8 @@ class RealtimePhysMop:
         self.smplh_f = SMPLH(gender='female', device=self.device)
 
         self.model = PhysMoP(hist_length=config.hist_length,
-                                       physics=True,
-                                       data=False,
+                                       physics=False,
+                                       data=True,
                                        fusion=False,
                                        device=self.device
                                        ).to(self.device)
