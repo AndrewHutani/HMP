@@ -37,9 +37,9 @@ class RealtimePhysMop:
         self.smplh_f = SMPLH(gender='female', device=self.device)
 
         self.model = PhysMoP(hist_length=config.hist_length,
-                                       physics=False,
+                                       physics=True,
                                        data=True,
-                                       fusion=False,
+                                       fusion=True,
                                        device=self.device
                                        ).to(self.device)
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
@@ -70,7 +70,7 @@ class RealtimePhysMop:
         print(f"Using device: {self.device}")
 
 
-    def predict(self, data_test):
+    def predict(self, input_data):
         """
         data_test: dict
             Contains the following keys:
@@ -79,6 +79,7 @@ class RealtimePhysMop:
             - gender_id: Tensor of shape (Batch size, Frames) representing which gender to use
         """
         # Pad all time-dependent tensors to config.total_length at the front if needed
+        data_test = input_data.copy()
         pad_len = config.total_length - data_test['q'].shape[1]
         if pad_len > 0:
             for k in ['q', 'shape', 'gender_id']:

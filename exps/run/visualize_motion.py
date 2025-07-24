@@ -7,10 +7,12 @@ from config import config
 from datasets.h36m_eval import H36MEval
 import torch
 from utils.misc import expmap2rotmat_torch, find_indices_256, find_indices_srnn, rotmat2xyz_torch
+import matplotlib.animation as animation
+from matplotlib.animation import PillowWriter
 
-def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visualization", skeleton_type = None):
+def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visualization", skeleton_type = None,save_gif_path = None):
     """
-    Visualize a continuous motion sequence in 3D.
+    Save a continuous motion sequence in 3D.
 
     :param motion_sequence: Numpy array of shape [num_frames, num_joints, 3] (motion sequence).
     :param title: Title of the plot.
@@ -47,7 +49,7 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    for frame_idx in range(motion_sequence.shape[0]):
+    def update(frame_idx):
         ax.clear()
         ax.set_xlim([-1, 1])
         ax.set_ylim([-1, 1])
@@ -55,27 +57,26 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         ax.set_xlabel("X")
         ax.set_ylabel("Y")
         ax.set_zlabel("Z")
-
         ax.set_title(f"Frame {frame_idx}: {motion_sequence[frame_idx, 0]}")
-
         joints = motion_sequence[frame_idx]
         ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2], c='r', marker='o')
-
-        if skeleton_type != None:
-            # Draw skeleton connections
+        if skeleton_type is not None:
             for connection in connections:
                 joint1, joint2 = connection
                 ax.plot([joints[joint1, 0], joints[joint2, 0]],
                         [joints[joint1, 1], joints[joint2, 1]],
                         [joints[joint1, 2], joints[joint2, 2]], 'r', alpha=0.5)
         else:
-            # Add joint indices as text annotations
             for joint_idx, (x, y, z) in enumerate(joints):
-                ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)        
-        
-        plt.pause(0.1)  # Adjust the pause duration for smoother animation
+                ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
 
-    plt.show()
+    ani = animation.FuncAnimation(fig, update, frames=motion_sequence.shape[0], interval=100)
+
+    if save_gif_path:
+        ani.save(save_gif_path, writer=PillowWriter(fps=10))
+    else:
+        while True:
+            plt.show()
 
 def preprocess(filename):
     info = open(filename, 'r').readlines()
@@ -146,6 +147,19 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         (12, 13), # LElbow to LWrist
     ]
 
+    connections = [
+        # Spine/Torso/Head
+        (0, 3), (3,6), (6, 9), (9, 12),
+        #Left leg
+        (0, 1), (1, 4), (4, 7),
+        # Right leg
+        (0, 2), (2, 5), (5, 8),
+        # Left arm
+        (6, 10), (10, 13), (13, 15), (15, 17),
+        # Right arm
+        (6, 11), (11, 14), (14, 16), (16, 18)
+    ]
+
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -166,33 +180,32 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         ax.set_title(f"{title} - Time Step #{frame_idx}")
 
         # Plot predicted joints for the specific frame
-        predicted_joints = predicted_positions[frame_idx - 1]  # Subtract 1 because time_steps are 1-based
-        ax.scatter(predicted_joints[:, 0], predicted_joints[:, 2], predicted_joints[:, 1], c='r', marker='o', label='Predicted')
+        predicted_joints = predicted_positions[frame_idx]  # Subtract 1 because time_steps are 1-based
+        ax.scatter(predicted_joints[:, 0], predicted_joints[:, 1], predicted_joints[:, 2], c='r', marker='o', label='Predicted')
 
         # # Add joint indices as text annotations
         # for joint_idx, (x, z, y) in enumerate(predicted_joints):
         #     ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
 
         # Plot ground truth joints for the specific frame
-        ground_truth_joints = ground_truth_positions[frame_idx - 1]
-        ax.scatter(ground_truth_joints[:, 0], ground_truth_joints[:, 2], ground_truth_joints[:, 1], c='b', marker='^', label='Ground Truth')
+        ground_truth_joints = ground_truth_positions[frame_idx]
+        ax.scatter(ground_truth_joints[:, 0], ground_truth_joints[:, 1], ground_truth_joints[:, 2], c='b', marker='^', label='Ground Truth')
 
         ax.legend()
         # Draw skeleton connections for predicted motion
-        # for connection in connections:
-        #     joint1, joint2 = connection
-        #     ax.plot([predicted_joints[joint1, 0], predicted_joints[joint2, 0]],
-        #             [predicted_joints[joint1, 2], predicted_joints[joint2, 2]],
-        #             [predicted_joints[joint1, 1], predicted_joints[joint2, 1]], 'r', alpha=0.5)
-        #     ax.plot(
-        #         [ground_truth_joints[joint1, 0], ground_truth_joints[joint2, 0]],
-        #         [ground_truth_joints[joint1, 2], ground_truth_joints[joint2, 2]],
-        #         [ground_truth_joints[joint1, 1], ground_truth_joints[joint2, 1]],
-        #         c='b'
-        #     )  
+        for connection in connections:
+            joint1, joint2 = connection
+            ax.plot([predicted_joints[joint1, 0], predicted_joints[joint2, 0]],
+                    [predicted_joints[joint1, 1], predicted_joints[joint2, 1]],
+                    [predicted_joints[joint1, 2], predicted_joints[joint2, 2]], 'r', alpha=0.5)
+            ax.plot(
+                [ground_truth_joints[joint1, 0], ground_truth_joints[joint2, 0]],
+                [ground_truth_joints[joint1, 1], ground_truth_joints[joint2, 1]],
+                [ground_truth_joints[joint1, 2], ground_truth_joints[joint2, 2]],
+                c='b'
+            )  
 
         plt.pause(0.1)  # Pause to display each frame
-
     plt.show()
         
 
