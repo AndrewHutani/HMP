@@ -97,7 +97,7 @@ class AMASSDataset(data.Dataset):
             N = len(amass_motion_poses)
             if N < self.amass_motion_target_length + self.amass_motion_input_length:
                 continue
-
+            
             frame_rate = amass_info['mocap_framerate']
             sample_rate = int(frame_rate // 25)
             sampled_index = np.arange(0, N, sample_rate)
