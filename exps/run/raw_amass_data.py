@@ -52,13 +52,13 @@ def augment_motion(data):
 
     seq_length = q.shape[1]
 
-    # Current limits of the hip joints (indices 6 and 9)
+    # Current limits of the angle between hip and knee joints (indices 6 and 9)
     current_min = q[:, :, [6, 9]].min(dim=1, keepdim=True)[0]
     current_max = q[:, :, [6, 9]].max(dim=1, keepdim=True)[0]
     print(f"Current limits for hip joints: min={current_min}, max={current_max}")
 
-    # Try increasing the amplitude of the hip joints along the first axis
-    q = rescale_joint_limits(q, joint_indices=[6,9], new_min=-0.5, new_max=0)
+    # Try increasing the amplitude of angle between hip and knee joints along the first axis
+    q = rescale_joint_limits(q, joint_indices=[6,9], new_min=-0.26, new_max=-0.04)
 
 
     # Speed augmentation, say we want to speed up the motion by 50%
@@ -96,7 +96,7 @@ time_idx = [1, 3, 7, 9, 13, 17, 21, 24] # Corresponds to idx*40 ms in the future
 selected_indices = [t + config.hist_length - 1 for t in time_idx]
 if __name__ == "__main__":
     realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
-    data_loader = DataLoader(dataset=BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length, filter_str="treadmill"),
+    data_loader = DataLoader(dataset=BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length, filter_str="treadmill_slow"),
                                 batch_size=1,
                                 shuffle=False,
                                 num_workers=8)
@@ -105,8 +105,8 @@ if __name__ == "__main__":
     for batch_idx, batch in enumerate(data_loader):
 
         del batch['file_paths']
-        raw_gait_cycle_data = {key: value[:, 23:48] for key, value in batch.items()}
-        # model_output, batch_info = realtime_model.predict(raw_gait_cycle_data)
+        raw_gait_cycle_data = {key: value[:, :50] for key, value in batch.items()}
+        model_output, batch_info = realtime_model.predict(raw_gait_cycle_data)
         # unaugmented_J, _, _, _ = realtime_model.model_output_to_3D_joints(
         #         model_output, batch_info, mode='test'
         #     )
@@ -122,7 +122,7 @@ if __name__ == "__main__":
             if 'error' in key:
                 print(f"{key}: {value[0, selected_indices]}, shape: {value.shape}")
         visualize_motion_with_ground_truth(
-            pred_J_data.detach().cpu().numpy(), augmented_J.detach().cpu().numpy(), 
+            pred_J_fusion.detach().cpu().numpy(), augmented_J.detach().cpu().numpy(), 
         )
 
         break
