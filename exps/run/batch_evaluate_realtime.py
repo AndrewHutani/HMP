@@ -43,7 +43,7 @@ with open(log_filename, "w") as log_file:
         mpjpe_upper_all_samples = []
         mpjpe_lower_all_samples = []
 
-        for i, idx in tqdm(enumerate(action_indices), desc=f"{action} Progress"):  # <-- Use tqdm here
+        for idx in tqdm(action_indices, desc=f"{action} Progress"):  # <-- Use tqdm here
             with torch.no_grad():
                 test_input, test_output = dataset.__getitem__(idx)
                 full_motion = torch.cat([test_input, test_output], dim=0)
@@ -62,7 +62,6 @@ with open(log_filename, "w") as log_file:
                 mpjpe_upper_all_samples.append(np.stack(mpjpe_upper_per_obs))  # shape: (obs_len, 4)
                 mpjpe_lower_all_samples.append(np.stack(mpjpe_lower_per_obs))  # shape: (obs_len, 4)
 
-        print(mpjpe_upper_all_samples)
         mpjpe_upper_all_samples = np.stack(mpjpe_upper_all_samples)  # shape: (num_samples, obs_len, 4)
         mpjpe_lower_all_samples = np.stack(mpjpe_lower_all_samples)  # shape: (num_samples, obs_len, 4)
 
