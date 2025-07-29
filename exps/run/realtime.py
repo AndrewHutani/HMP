@@ -18,7 +18,6 @@ class RealTimePrediction():
         self.model = model
         self.model.eval()
         self.device = torch.device("cpu")
-        print(f"Using device: {self.device}")
         self.model.to(self.device)
         self.joint_used_xyz = np.array([2,3,4,5,7,8,9,10,12,13,14,15,17,18,19,21,22,25,26,27,29,30]).astype(np.int64)
         self.joint_to_ignore = np.array([16, 20, 23, 24, 28, 31]).astype(np.int64)
