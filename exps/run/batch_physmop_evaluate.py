@@ -46,6 +46,8 @@ if __name__ == "__main__":
 
 
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
+        if i >= 2:
+            break
         with torch.no_grad():
             T = batch['q'].shape[1]
             mpjpe_data_per_obs_upper = []
@@ -55,10 +57,12 @@ if __name__ == "__main__":
             mpjpe_physics_gt_per_obs_lower = []
             mpjpe_fusion_per_obs_lower = []
 
-            for i in range(config.hist_length):
-                start_idx = 24 - i
+            for j in range(config.hist_length):
                 # Trim input to last obs_len frames
-                batch_trimmed = {k: v[:, start_idx:config.total_length, ...] if isinstance(v, torch.Tensor) and v.shape[1] == config.total_length else v for k, v in batch.items()}
+                batch_trimmed = {k: v[:, :j+1 + config.pred_length, ...] if (isinstance(v, torch.Tensor) and v.shape[1] >= j+1 + config.pred_length)
+                                else v
+                                for k, v in batch.items()
+                            }
                 model_output, batch_info = realtime_model.predict(batch_trimmed)
                 gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
                 # Compute MPJPE for this observation length (example: using pred_J_fusion)
