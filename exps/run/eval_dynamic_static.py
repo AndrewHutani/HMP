@@ -26,45 +26,39 @@ def parse_action_data(filename):
                     action_data[current_action].append([float(x) for x in arr[0].split()])
     return action_data
 
-data_perf = parse_action_data("physmop_data_mpjpe_log.txt")
-physics_perf = parse_action_data("physmop_physics_mpjpe_log.txt")
-fusion_perf = parse_action_data("physmop_fusion_mpjpe_log.txt")
+back_to_front = parse_action_data("gcnext_performance_back_to_front.txt")
+front_to_back = parse_action_data("gcnext_performance_front_to_back.txt")
 
 # Aggregate by group
 def group_average(actions, action_data):
     group = []
-    # Create a lowercase mapping of action_data for case-insensitive lookup
-    action_data_lower = {k.lower(): v for k, v in action_data.items()}
     for act in actions:
-        act_lower = act.lower()
-        if act_lower in action_data_lower:
-            group.append(np.array(action_data_lower[act_lower][:50]))  # shape: (50, 4)
+        if act in action_data:
+            group.append(np.array(action_data[act][:50]))  # shape: (50, 4)
     if group:
         return np.mean(np.stack(group), axis=0)  # shape: (50, 4)
     else:
         return None
 
-data_avg = group_average(all_actions, data_perf)
-physics_avg = group_average(all_actions, physics_perf)
-fusion_avg = group_average(all_actions, fusion_perf)
+back_to_front_avg = group_average(all_actions, back_to_front)
+front_to_back_avg = group_average(all_actions, front_to_back)
 
-# # Compute relative MPJPE (percentage of first observation)
-# def relative_mpjpe(avg):
-#     return 100 * avg / avg[0]  # shape: (50, 4)
+# Compute relative MPJPE (percentage of first observation)
+def relative_mpjpe(avg):
+    return 100 * avg / avg[0]  # shape: (50, 4)
 
-# static_rel = relative_mpjpe(static_avg)
-# dynamic_rel = relative_mpjpe(dynamic_avg)
+back_to_front_rel = relative_mpjpe(back_to_front_avg)
+front_to_back_rel = relative_mpjpe(front_to_back_avg)
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 
 plt.figure(figsize=(10,6))
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    # plt.plot(data_avg[:, i], label=f"{label} (Data)", color=colors[i], linestyle='--')
-    # plt.plot(physics_avg[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
-    plt.plot(fusion_avg[:, i], label=f"{label} (Fusion)", color=colors[i], linestyle='-')
+    plt.plot(back_to_front_avg[:, i], label=f"{label} Back-to-front", color=colors[i], linestyle='-')
+    plt.plot(front_to_back_avg[:, i], label=f"{label} Front-to-back", color=colors[i], linestyle='--')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Absolute MPJPE (mm)")
-plt.title("Absolute MPJPE vs. Observed Frames\nFusion Model")
+plt.title("Absolute MPJPE vs. Observed Frames")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
@@ -73,9 +67,8 @@ third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label
 fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
 
 # Second legend
-line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Fusion")
-line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Data")
-line_dotted = Line2D([], [], color='black', linestyle='-.', linewidth=1.5, label="Physics")
+line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Back-to-front")
+line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Front-to-back")
 
 
 # first_legend = plt.legend(handles=[first_line, second_line, third_line, fourth_line], loc='upper right', 
@@ -88,11 +81,11 @@ line_dotted = Line2D([], [], color='black', linestyle='-.', linewidth=1.5, label
 # Combine all handles and labels into one legend
 all_handles = [
     first_line, second_line, third_line, fourth_line,  # Timesteps/colors
-    line_solid, line_dashed, line_dotted               # Line types
+    line_solid, line_dashed                           # Line types
 ]
 all_labels = [
     '80ms', '400ms', '560ms', '1000ms',               # Timesteps/colors
-    'Fusion', 'Data', 'Physics'                       # Line types
+    'Back-to-front', 'Front-to-back'                  # Line types
 ]
 
 plt.legend(
