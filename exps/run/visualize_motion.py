@@ -109,7 +109,10 @@ def preprocess(filename):
 
     return joint_positions
 
-def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, title="Predicted vs Ground Truth Motion"):
+def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, 
+                                       title="Predicted vs Ground Truth Motion",
+                                       skeleton_type=None,
+                                       save_gif_path=None):
     """
     Visualize the predicted motion and ground truth in 3D for specific time steps, with skeleton connections.
 
@@ -118,36 +121,8 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
     :param time_steps: List of time steps to visualize (e.g., [2, 10, 14, 25])
     :param title: Title of the plot
     """
-    # Define the connections between joints
-    connections = [
-        # Spine/Torso
-        (0, 7),   # Hip to Spine
-        (7, 8),   # Spine to Thorax  
-        (8, 9),   # Thorax to Neck/Nose
-        (9, 10),  # Neck to Head
-        
-        # Right leg
-        (0, 1),   # Hip to RHip
-        (1, 2),   # RHip to RKnee
-        (2, 3),   # RKnee to RFoot
-        
-        # Left leg  
-        (0, 4),   # Hip to LHip
-        (4, 5),   # LHip to LKnee
-        (5, 6),   # LKnee to LFoot
-        
-        # Right arm
-        (8, 14),  # Thorax to RShoulder
-        (14, 15), # RShoulder to RElbow
-        (15, 16), # RElbow to RWrist
-        
-        # Left arm
-        (8, 11),  # Thorax to LShoulder
-        (11, 12), # LShoulder to LElbow
-        (12, 13), # LElbow to LWrist
-    ]
-
-    connections = [
+    # Define the connections between joints (skeleton structure)
+    amass_connections = [
         # Spine/Torso/Head
         (0, 3), (3,6), (6, 9), (9, 12),
         #Left leg
@@ -160,6 +135,21 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         (6, 11), (11, 14), (14, 16), (16, 18)
     ]
 
+    h36m_connections = [
+        (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
+        (0, 6), (6, 7), (7, 8), (8, 9), (9, 10),
+        (11, 12), (12, 13), (13, 14), (14, 15),
+        (16, 17), (17, 18), (18, 19), (19, 20), 
+        (20, 21), (21, 22), (22, 23),
+        (24, 25), (25, 26), (26, 27), (27, 28), 
+        (28, 29), (29, 30), (30, 31)
+    ]
+
+    if skeleton_type == 'h36m':
+        connections = h36m_connections
+    elif skeleton_type == 'amass':
+        connections = amass_connections
+
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -167,7 +157,7 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
     ax.view_init(elev=20, azim=55)  # Adjust elevation and azimuth as needed
     ax.set_title(title)
 
-    for frame_idx in range(len(predicted_positions)):
+    def update(frame_idx):
         ax.clear()
         ax.set_xlim([-1, 1])
         ax.set_ylim([-1, 1])
@@ -175,39 +165,36 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         ax.set_xlabel("X")
         ax.set_ylabel("Y")
         ax.set_zlabel("Z")
+        ax.set_title(f"Frame {frame_idx}")
 
-        # Update the title to include the current time step
-        ax.set_title(f"{title} - Time Step #{frame_idx}")
 
-        # Plot predicted joints for the specific frame
-        predicted_joints = predicted_positions[frame_idx]  # Subtract 1 because time_steps are 1-based
+        predicted_joints = predicted_positions[frame_idx]
         ax.scatter(predicted_joints[:, 0], predicted_joints[:, 1], predicted_joints[:, 2], c='r', marker='o', label='Predicted')
-
-        # # Add joint indices as text annotations
-        # for joint_idx, (x, z, y) in enumerate(predicted_joints):
-        #     ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
 
         # Plot ground truth joints for the specific frame
         ground_truth_joints = ground_truth_positions[frame_idx]
         ax.scatter(ground_truth_joints[:, 0], ground_truth_joints[:, 1], ground_truth_joints[:, 2], c='b', marker='^', label='Ground Truth')
 
-        ax.legend()
-        # Draw skeleton connections for predicted motion
-        for connection in connections:
-            joint1, joint2 = connection
-            ax.plot([predicted_joints[joint1, 0], predicted_joints[joint2, 0]],
-                    [predicted_joints[joint1, 1], predicted_joints[joint2, 1]],
-                    [predicted_joints[joint1, 2], predicted_joints[joint2, 2]], 'r', alpha=0.5)
-            ax.plot(
-                [ground_truth_joints[joint1, 0], ground_truth_joints[joint2, 0]],
-                [ground_truth_joints[joint1, 1], ground_truth_joints[joint2, 1]],
-                [ground_truth_joints[joint1, 2], ground_truth_joints[joint2, 2]],
-                c='b'
-            )  
+        if skeleton_type is not None:
+            for connection in connections:
+                joint1, joint2 = connection
+                ax.plot([predicted_joints[joint1, 0], predicted_joints[joint2, 0]],
+                        [predicted_joints[joint1, 1], predicted_joints[joint2, 1]],
+                        [predicted_joints[joint1, 2], predicted_joints[joint2, 2]], 'r', alpha=0.5)
+                ax.plot(
+                    [ground_truth_joints[joint1, 0], ground_truth_joints[joint2, 0]],
+                    [ground_truth_joints[joint1, 1], ground_truth_joints[joint2, 1]],
+                    [ground_truth_joints[joint1, 2], ground_truth_joints[joint2, 2]],
+                    c='b'
+                )  
 
-        plt.pause(0.1)  # Pause to display each frame
-    plt.show()
-        
+    ani = animation.FuncAnimation(fig, update, frames=predicted_positions.shape[0], interval=100)
+
+    if save_gif_path:
+        ani.save(save_gif_path, writer=PillowWriter(fps=10))
+    else:
+        while True:
+            plt.show()
 
 
 
