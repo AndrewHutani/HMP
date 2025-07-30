@@ -31,12 +31,12 @@ def parse_action_data(filename, body_part):
     return np.array(data)
 
 
-upper_data = parse_action_data("physmop_data_mpjpe_log.txt", "upper body")
-lower_data = parse_action_data("physmop_data_mpjpe_log.txt", "lower body")
-upper_physics = parse_action_data("physmop_physics_mpjpe_log.txt", "upper body")
-lower_physics = parse_action_data("physmop_physics_mpjpe_log.txt", "lower body")
-upper_fusion = parse_action_data("physmop_fusion_mpjpe_log.txt", "upper body")
-lower_fusion = parse_action_data("physmop_fusion_mpjpe_log.txt", "lower body")
+upper_data = parse_action_data("physmop_data_mpjpe_log_front_to_back.txt", "upper body")
+lower_data = parse_action_data("physmop_data_mpjpe_log_front_to_back.txt", "lower body")
+upper_physics = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "upper body")
+lower_physics = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
+upper_fusion = parse_action_data("physmop_fusion_mpjpe_log_front_to_back.txt", "upper body")
+lower_fusion = parse_action_data("physmop_fusion_mpjpe_log_front_to_back.txt", "lower body")
 
 # Aggregate by group
 def group_average(actions, action_data):
@@ -61,19 +61,19 @@ lower_fusion = lower_fusion[:, [0, 1, 4, 7]]
 def relative_mpjpe(avg):
     return 100 * avg / avg[0]  # shape: (50, 4)
 
-# dynamic_rel = relative_mpjpe(dynamic_avg)
-# static_rel = relative_mpjpe(static_avg)
+upper_rel = relative_mpjpe(upper_data)
+lower_rel = relative_mpjpe(lower_data)
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 
 plt.figure(figsize=(10,6))
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(upper_fusion[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
-    plt.plot(lower_fusion[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
+    plt.plot(upper_rel[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
+    plt.plot(lower_rel[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
     # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
 plt.xlabel("Number of Observed Frames")
-plt.ylabel("Absolute MPJPE (mm)")
-plt.title("Absolute MPJPE for the Fusion Branch vs. Observed Frames")
+plt.ylabel("Relative MPJPE (mm)")
+plt.title("Relative MPJPE for the Data Branch vs. Observed Frames")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
