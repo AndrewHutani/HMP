@@ -11,23 +11,35 @@ dynamic_actions = ["Walking", "WalkingTogether", "WalkingDog", "Greeting"]
 all_actions = static_actions + combination_actions + dynamic_actions
 
 # Parse the data
-def parse_action_data(filename):
-    action_data = {}
-    current_action = None
+def parse_action_data(filename, body_part):
+    data = []
+    found_section = False
+    header = f"Averaged MPJPE ({body_part}) for each observation length and each selected timestep:"
     with open(filename, "r") as f:
         for line in f:
-            m = re.match(r"Averaged MPJPE for each observation length and each selected timestep: ?([A-Za-z]+)", line)
-            if m:
-                current_action = m.group(1)
-                action_data[current_action] = []
-            elif line.startswith("Obs") and current_action:
-                arr = re.findall(r"\[([^\]]+)\]", line)
-                if arr:
-                    action_data[current_action].append([float(x) for x in arr[0].split()])
-    return action_data
+            if line.strip() == header:
+                found_section = True
+                continue
+            if found_section:
+                if line.startswith("Obs"):
+                    arr = re.findall(r"\[([^\]]+)\]", line)
+                    if arr:
+                        data.append([float(x) for x in arr[0].split()])
+                elif line.strip() == "":
+                    break  # End of section
+    return np.array(data)
 
-back_to_front = parse_action_data("gcnext_performance_back_to_front.txt")
-front_to_back = parse_action_data("gcnext_performance_front_to_back.txt")
+back_to_front_upper = parse_action_data("physmop_physics_mpjpe_log.txt", "upper body")
+back_to_front_lower = parse_action_data("physmop_physics_mpjpe_log.txt", "lower body")
+front_to_back_upper = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "upper body")
+front_to_back_lower = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
+# Combine upper and lower body data for back-to-front and front-to-back
+back_to_front = np.mean([back_to_front_upper, back_to_front_lower], axis=0)  # shape: (50, 8)
+front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 8)
+
+# Select the relevant columns for the 4 timesteps
+back_to_front = back_to_front[:, [0, 1, 4, 7]]  # shape: (50, 4)
+front_to_back = front_to_back[:, [0, 1, 4, 7]]  # shape: (50, 4)
 
 # Aggregate by group
 def group_average(actions, action_data):
@@ -40,25 +52,25 @@ def group_average(actions, action_data):
     else:
         return None
 
-back_to_front_avg = group_average(all_actions, back_to_front)
-front_to_back_avg = group_average(all_actions, front_to_back)
+# back_to_front_avg = group_average(all_actions, back_to_front)
+# front_to_back_avg = group_average(all_actions, front_to_back)
 
 # Compute relative MPJPE (percentage of first observation)
 def relative_mpjpe(avg):
     return 100 * avg / avg[0]  # shape: (50, 4)
 
-back_to_front_rel = relative_mpjpe(back_to_front_avg)
-front_to_back_rel = relative_mpjpe(front_to_back_avg)
+# back_to_front_rel = relative_mpjpe(back_to_front_avg)
+# front_to_back_rel = relative_mpjpe(front_to_back_avg)
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 
 plt.figure(figsize=(10,6))
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(back_to_front_avg[:, i], label=f"{label} Back-to-front", color=colors[i], linestyle='-')
-    plt.plot(front_to_back_avg[:, i], label=f"{label} Front-to-back", color=colors[i], linestyle='--')
+    plt.plot(back_to_front[:, i], label=f"{label} Back-to-front", color=colors[i], linestyle='-')
+    plt.plot(front_to_back[:, i], label=f"{label} Front-to-back", color=colors[i], linestyle='--')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Absolute MPJPE (mm)")
-plt.title("Absolute MPJPE vs. Observed Frames")
+plt.title("Absolute MPJPE vs. Observed Frames\n Physics branch of PhysMoP")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
