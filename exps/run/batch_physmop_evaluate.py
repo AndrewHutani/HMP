@@ -46,8 +46,6 @@ if __name__ == "__main__":
 
 
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
-        if i >= 2:
-            break
         with torch.no_grad():
             T = batch['q'].shape[1]
             mpjpe_data_per_obs_upper = []
