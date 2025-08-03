@@ -75,8 +75,8 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
     if save_gif_path:
         ani.save(save_gif_path, writer=PillowWriter(fps=10))
     else:
-        while True:
-            plt.show()
+        # while True:
+        plt.show()
 
 def preprocess(filename):
     info = open(filename, 'r').readlines()
