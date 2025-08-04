@@ -11,9 +11,11 @@ from prediction_times import prediction_times
 import time
 import numpy as np
 
+physmop_to_gcn = [2, 5, 8, 8, 1, 4, 7, 7, 3, 6, 9, 12, 13, 15, 17, 17, 17, 14, 16, 18, 18, 18]
 
 ds = "AMASS" 
 if __name__ == "__main__":
+    all_gcn_gt_J_flat = []
     realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
     # Option 2: Load only walking data
     # print("\n=== Loading walking data only ===")
@@ -32,6 +34,7 @@ if __name__ == "__main__":
 
     # Process first walking sample
     for batch_idx, batch in enumerate(data_loader):
+
         print(f"Processing sample {batch_idx}")
         # print(f"Action: {batch['action'][0]}")
         # print(f"File: {batch['file_path'][0]}")
@@ -40,27 +43,31 @@ if __name__ == "__main__":
         print(f"Batch shape: {batch['q'].shape}")
         print(f"Batch file paths: {batch['file_paths']}")
         num_of_samples = len(batch['file_paths'])
+        
         del batch['file_paths']
         # # Use a sliding window of some sort to feed the model the correct amount of data
         for i in range(num_of_samples):
             input_batch = {key: value[:,i*config.total_length:i*config.total_length+config.total_length] for key, value in batch.items()}
             print(f"Input batch shape: {input_batch['q'].shape}")
 
-            t0 = time.perf_counter()
             model_output, batch_info = realtime_model.predict(input_batch)
-            t1 = time.perf_counter()
-            latency_times.append(t1 - t0)
             gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(
                 model_output, batch_info, mode='test'
             )
-            visualize_continuous_motion(gt_J)
+            print(f"GT Joints shape: {gt_J.shape}")
+            # visualize_continuous_motion(gt_J.detach().numpy(), "Ground Truth")
+            gt_J = np.reshape(gt_J.detach().numpy(), (gt_J.shape[0], -1, 3))
+            # the 0th index is the root joint, which is not used in GCN, and should be subtracted from all joints
+            gt_J = gt_J - gt_J[:, 0, :][:, np.newaxis, :]       
+            gcn_gt_J = gt_J[:, physmop_to_gcn, :]
+            print(f"GCN GT Joints shape: {gcn_gt_J.shape}")
+            # Flatten to 2D if needed (e.g., [frames, joints*3])
+            frames = gcn_gt_J.shape[0]
+            joints = gcn_gt_J.shape[1]
+            gcn_gt_J_flat = gcn_gt_J.reshape(frames, joints * 3)  # assuming batch size 1
+            all_gcn_gt_J_flat.append(gcn_gt_J_flat)
 
-        avg_latency = sum(latency_times) / len(latency_times)
-        print(f"Average latency for processing {batch_idx + 1} samples: {avg_latency:.4f} seconds")
-        jitter = np.std(latency_times)
-        print(f"Jitter in latency: {jitter:.6f} seconds")
-        if prediction_times:
-            prediction_times = np.array(prediction_times)
-            avg_prediction_times = np.mean(prediction_times, axis=0)
-            print(f"Average prediction times: {avg_prediction_times}")
+        # Save all GCN ground truth joints to a file
+        all_gcn_gt_J_flat = np.concatenate(all_gcn_gt_J_flat, axis=0)
+        np.savetxt("ordered_gt_J.txt", all_gcn_gt_J_flat, fmt="%.6f", delimiter=',')
         break

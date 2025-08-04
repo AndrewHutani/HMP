@@ -12,7 +12,7 @@ combination_actions =["Discussion", "Directions", "Phoning", "Eating", "Waiting"
 dynamic_actions = ["walking", "walkingtogether", "walkingdog", "greeting"]
 
 # Parse the data
-def parse_action_data(filename, body_part):
+def parse_physmop_data(filename, body_part):
     data = []
     found_section = False
     header = f"Averaged MPJPE ({body_part}) for each observation length and each selected timestep:"
@@ -30,13 +30,32 @@ def parse_action_data(filename, body_part):
                     break  # End of section
     return np.array(data)
 
+# Parse the data
+def parse_gcn_data(filename, body_part):
+    import re
+    action_data = {}
+    current_action = None
+    with open(filename, "r") as f:
+        for line in f:
+            m = re.match(r"Averaged MPJPE \((.+)\) for each observation length and each selected timestep: (.+)", line)
+            if m and m.group(1).strip().lower() == body_part.lower():
+                current_action = m.group(2).strip().lower()  # <-- action name as key
+                action_data[current_action] = []
+            elif line.startswith("Obs") and current_action:
+                arr = re.findall(r"\[([^\]]+)\]", line)
+                if arr:
+                    action_data[current_action].append([float(x) for x in arr[0].split()])
+    return action_data
 
-upper_data = parse_action_data("physmop_data_mpjpe_log_front_to_back.txt", "upper body")
-lower_data = parse_action_data("physmop_data_mpjpe_log_front_to_back.txt", "lower body")
-upper_physics = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "upper body")
-lower_physics = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
-upper_fusion = parse_action_data("physmop_fusion_mpjpe_log_front_to_back.txt", "upper body")
-lower_fusion = parse_action_data("physmop_fusion_mpjpe_log_front_to_back.txt", "lower body")
+upper_data = parse_physmop_data("physmop_data_mpjpe_log_front_to_back.txt", "upper body")
+lower_data = parse_physmop_data("physmop_data_mpjpe_log_front_to_back.txt", "lower body")
+upper_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt", "upper body")
+lower_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
+upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "upper body")
+lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "lower body")
+
+upper_gcn = parse_gcn_data("mpjpe_log.txt", "upper body")
+lower_gcn = parse_gcn_data("mpjpe_log.txt", "lower body")
 
 # Aggregate by group
 def group_average(actions, action_data):
@@ -57,6 +76,9 @@ lower_physics = lower_physics[:, [0, 1, 4, 7]]
 upper_fusion = upper_fusion[:, [0, 1, 4, 7]]
 lower_fusion = lower_fusion[:, [0, 1, 4, 7]]
 
+upper_gcn = group_average(actions, upper_gcn)
+lower_gcn = group_average(actions, lower_gcn)
+
 # Compute relative MPJPE (percentage of first observation)
 def relative_mpjpe(avg):
     return 100 * avg / avg[0]  # shape: (50, 4)
@@ -68,8 +90,8 @@ colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 
 plt.figure(figsize=(10,6))
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(upper_rel[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
-    plt.plot(lower_rel[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
+    plt.plot(upper_gcn[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
+    plt.plot(lower_gcn[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
     # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Relative MPJPE (mm)")
@@ -86,14 +108,6 @@ line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="
 line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Lower")
 # line_dotted = Line2D([], [], color='black', linestyle='-.', linewidth=1.5, label="Physics")
 
-
-# first_legend = plt.legend(handles=[first_line, second_line, third_line, fourth_line], loc='upper right', 
-#                           bbox_to_anchor=(1.0, 1.0), 
-#                           title='Timesteps into the future')
-# ax = plt.gca().add_artist(first_legend)
-# second_legend = plt.legend(handles=[line_solid, line_dashed], loc='upper right', 
-#                            bbox_to_anchor=(0.88, 1.0),
-#                            title='Line types')
 # Combine all handles and labels into one legend
 all_handles = [
     first_line, second_line, third_line, fourth_line,  # Timesteps/colors
