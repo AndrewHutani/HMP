@@ -117,12 +117,18 @@ if __name__ == "__main__":
             )
         eval_results = realtime_model.evaluation_metrics(augmented_J, pred_J_data, pred_J_physics, pred_J_fusion)
 
-        # Only use the error keys and not the accel
-        for key, value in eval_results.items():
-            if 'error' in key:
-                print(f"{key}: {value[0, selected_indices]}, shape: {value.shape}")
-        visualize_motion_with_ground_truth(
-            pred_J_fusion.detach().cpu().numpy(), augmented_J.detach().cpu().numpy(), 
+        print(augmented_J.shape)
+        visualize_continuous_motion(
+            augmented_J.detach().cpu().numpy(), 
+            title=f"Augmented Motion Visualization - Sample {batch_idx+1}",
         )
+
+        # # Only use the error keys and not the accel
+        # for key, value in eval_results.items():
+        #     if 'error' in key:
+        #         print(f"{key}: {value[0, selected_indices]}, shape: {value.shape}")
+        # visualize_motion_with_ground_truth(
+        #     pred_J_fusion.detach().cpu().numpy(), augmented_J.detach().cpu().numpy(), 
+        # )
 
         break
