@@ -87,15 +87,16 @@ upper_rel = relative_mpjpe(upper_data)
 lower_rel = relative_mpjpe(lower_data)
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
+x_vals = np.arange(1, len(upper_physics) + 1)
 
 plt.figure(figsize=(10,6))
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(upper_gcn[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
-    plt.plot(lower_gcn[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
+    plt.plot(x_vals, upper_physics[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
+    plt.plot(x_vals, lower_physics[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
     # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Relative MPJPE (mm)")
-plt.title("Relative MPJPE for the Data Branch vs. Observed Frames")
+plt.title("Relative MPJPE for the Physics Branch vs. Observed Frames")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')

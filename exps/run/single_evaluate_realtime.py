@@ -102,10 +102,8 @@ action = "walking"  # Change this to the action you want to evaluate
 config.motion.h36m_target_length = config.motion.h36m_target_length_eval
 dataset = H36MEval(config, 'test')
 walking_sample, root_sample = dataset.get_full_sequences_for_action(action)[0]
-# print("Walking sample shape: ", walking_sample.shape)
-# print("Root sample shape: ", root_sample.shape)
-# print("Root sample: ", root_sample[:, 0, :])
-amass_sample = np.loadtxt("ordered_gt_J.txt", delimiter=',')
+
+amass_sample = np.loadtxt("gt_J_treadmill_norm.txt", delimiter=',')
 amass_sample = amass_sample.reshape(-1, 22, 3)  # Reshape to [num_frames, num_joints, 3]
 # the xyz axes are also not in the same order so reorder them
 amass_sample = np.stack((amass_sample[:, :, 1], 
@@ -127,9 +125,10 @@ print(f"Test input shape: {test_input_.shape}")
 ground_truth = torch.tensor(amass_sample[(idx+1)*config.motion.h36m_input_length:((idx+1)*config.motion.h36m_input_length + config.motion.h36m_target_length)], dtype=torch.float32)
 realtime_predictor.batch_predict(test_input_, ground_truth, visualize, debug)
 global_observed_motion = realtime_predictor.add_global_translation(passthrough=True)  # Add global translation to the predicted motion
-visualize_continuous_motion(test_input_, skeleton_type='incomplete_h36m', title="Ground Truth Motion")
-# visualize_motion_with_ground_truth(realtime_predictor.predicted_motion, ground_truth, 
-#                                    title="Predicted vs Ground Truth Motion",
-#                                    skeleton_type='incomplete_h36m',)
+# visualize_continuous_motion(test_input_, skeleton_type='incomplete_h36m', title="Ground Truth Motion")
+visualize_motion_with_ground_truth(realtime_predictor.predicted_motion, ground_truth, 
+                                   title="Predicted vs Ground Truth Motion",
+                                   skeleton_type='incomplete_h36m',
+                                   save_gif_path="gcnext_prediction_on_amass_treadmill_norm.gif")
 
 

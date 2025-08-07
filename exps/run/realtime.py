@@ -296,7 +296,6 @@ class RealTimePrediction():
                 motion_input = motion_window[:, self.joint_used_xyz, :].reshape(1, input_length, -1)
             with torch.no_grad():
                 if config.deriv_input:
-                    print("Types of matrices:", self.dct_m.dtype, motion_input.dtype)
                     motion_input_ = torch.matmul(self.dct_m[:, :input_length, :], motion_input)
                 else:
                     motion_input_ = motion_input
@@ -354,8 +353,8 @@ class RealTimePrediction():
         """
         ground_truth: [self.total_prediction_horizon, 32, 3] - the ground truth motion
         """
-        lower_body_indices = np.arange(0, 11).tolist()
-        upper_body_indices = np.arange(11, 32).tolist()
+        lower_body_indices =[0, 1, 2, 3, 4, 5, 6, 7]
+        upper_body_indices = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 
         predicted_upper = self.predicted_motion[:, upper_body_indices] * 1000
         predicted_lower = self.predicted_motion[:, lower_body_indices] * 1000

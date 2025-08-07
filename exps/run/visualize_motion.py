@@ -226,6 +226,8 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
                     [ground_truth_joints_with_origin[joint1, 2], ground_truth_joints_with_origin[joint2, 2]],
                     c='b'
                 )  
+        
+        ax.legend(loc='upper right')
 
     ani = animation.FuncAnimation(fig, update, frames=predicted_positions.shape[0], interval=100)
 
