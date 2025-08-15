@@ -11,7 +11,6 @@ from visualize_motion import visualize_motion_with_ground_truth, visualize_conti
 from dataset.base_dataset_test import BaseDataset_test
 
 import utils.config as config
-from torchviz import make_dot
 from prediction_times import prediction_times
 import time
 import numpy as np
@@ -68,6 +67,8 @@ if __name__ == "__main__":
                     frames = gcn_gt_J.shape[0]
                     joints = gcn_gt_J.shape[1]
                     gcn_gt_J_flat = gcn_gt_J.reshape(frames, joints * 3)  # assuming batch size 1
+                    print(f"GCN Ground Truth Joints shape: {gcn_gt_J.shape}")
+                    visualize_continuous_motion(gcn_gt_J, "GCN Ground Truth Joints", skeleton_type='incomplete_h36m')
                     all_gcn_gt_J_flat.append(gcn_gt_J_flat)
 
                 # Save all GCN ground truth joints to a file
