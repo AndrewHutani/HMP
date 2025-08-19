@@ -50,7 +50,6 @@ if __name__ == "__main__":
         # Assume that the model always predicts the same number of frames, at the same frequency
         normal_batch = {k: v[:, -config.total_length:, ...] if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
 
-        print(f"Normal batch shape: {normal_batch['q'].shape}")
 
         downsample_rates = np.arange(3, 0.1, -0.2)  # From 3 to 0.1, step -0.2
         mpjpe_data_results = []
@@ -58,7 +57,6 @@ if __name__ == "__main__":
         mpjpe_fusion_results = []
 
         for downsample_rate in downsample_rates:
-            print(f"Processing rate: {downsample_rate:.2f}")
             processed_batch = {}
 
             if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
@@ -75,9 +73,10 @@ if __name__ == "__main__":
                 processed_batch = {}
                 for k, v in batch.items():
                     if k == 'q' and isinstance(v, torch.Tensor):
-                        orig_time_steps = v.shape[1]
+                        v_spliced = v[:, :-config.pred_length, ...]
+                        orig_time_steps = v_spliced.shape[1]
                         new_time_steps = int(np.round(orig_time_steps * upsample_factor))
-                        v_perm = v.permute(0, 2, 1)  # [batch, features, time]
+                        v_perm = v_spliced.permute(0, 2, 1)  # [batch, features, time]
                         v_upsampled = F.interpolate(v_perm, size=new_time_steps, mode='linear', align_corners=True)
                         v_upsampled = v_upsampled.permute(0, 2, 1)  # [batch, time, features]
                         processed_batch[k] = v_upsampled[:, -config.hist_length:, ...]
@@ -97,7 +96,7 @@ if __name__ == "__main__":
             model_output, batch_info = realtime_model.predict(combined_batch)
             gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
 
-            # visualize_continuous_motion(gt_J, title="Ground Truth Motion", skeleton_type="amass")
+            # visualize_continuous_motion(gt_J, title="Ground Truth Motion", skeleton_type="amass", save_gif_path="gt_motion_{}.gif".format(downsample_rate))
             # visualize_motion_with_ground_truth(pred_J_data.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Data)",
             #                                     skeleton_type="amass", save_gif_path="output.gif")
             eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
