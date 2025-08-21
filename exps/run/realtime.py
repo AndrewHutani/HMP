@@ -269,8 +269,6 @@ class RealTimePrediction():
             print("Stacked observed motion shape:", torch.stack(self.observed_motion).shape)
         observed_motion = torch.stack(self.observed_motion).to(self.device)
         n, c, _ = observed_motion.shape  # n: number of timesteps, c: number of joints
-        # Prepare input
-        motion_input = observed_motion[:, self.joint_used_xyz, :].reshape(n, -1)  # Shape: [n, len(joint_used_xyz) * 3]
 
         # Start with the first input_length frames
         if observed_motion.shape[0] < input_length:
@@ -291,9 +289,14 @@ class RealTimePrediction():
         
         t0 = time.perf_counter()
         for idx in range(num_prediction_chunks):
-            motion_input = motion_window[:, self.joint_used_xyz, :].reshape(1, input_length, -1)
+            if c == 22: 
+                # This means that the input is already in the correct format
+                motion_input = motion_window.reshape(1, input_length, -1)
+            else:
+                motion_input = motion_window[:, self.joint_used_xyz, :].reshape(1, input_length, -1)
             with torch.no_grad():
                 if config.deriv_input:
+                    print("Types of matrices:", self.dct_m.dtype, motion_input.dtype)
                     motion_input_ = torch.matmul(self.dct_m[:, :input_length, :], motion_input)
                 else:
                     motion_input_ = motion_input
@@ -307,9 +310,13 @@ class RealTimePrediction():
                 output = output.reshape(chunk_prediction_length, -1, 3)  # [prediction_horizon, 22, 3]
 
                 # Fill in the predicted joints into a full skeleton
-                motion_pred = motion_window[-1].unsqueeze(0).repeat(chunk_prediction_length, 1, 1)
-                motion_pred[:, self.joint_used_xyz, :] = output
-                motion_pred[:, self.joint_to_ignore, :] = motion_pred[:, self.joint_equal, :]
+                if c == 22:
+                    # If the input is already in the correct format, we just need to fill in the joints
+                    motion_pred = output
+                else:
+                    motion_pred = motion_window[-1].unsqueeze(0).repeat(chunk_prediction_length, 1, 1)
+                    motion_pred[:, self.joint_used_xyz, :] = output
+                    motion_pred[:, self.joint_to_ignore, :] = motion_pred[:, self.joint_equal, :]
 
                 outputs.append(motion_pred)
 
