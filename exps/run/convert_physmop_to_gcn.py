@@ -8,7 +8,7 @@ from dataset.action_aware_dataset import ActionAwareDataset
 from torch.utils.data import DataLoader
 from visualize_motion import visualize_motion_with_ground_truth, visualize_continuous_motion
 
-from dataset.base_dataset_test import BaseDataset_test
+from dataset.full_sequence_dataset_test import BaseDataset_test
 
 import utils.config as config
 from torchviz import make_dot
@@ -47,9 +47,10 @@ if __name__ == "__main__":
                 num_of_samples = len(batch['file_paths'])
                 
                 
-                file_path = batch['file_paths'][0]
+                file_path = batch['file_paths'][0][0]
                 file_path = os.path.basename(file_path)
                 file_path = os.path.splitext(file_path)[0]
+                file_path = file_path.rsplit('_', 1)[0]
                 del batch['file_paths']
                 # # Use a sliding window of some sort to feed the model the correct amount of data
                 for i in range(num_of_samples):
@@ -77,5 +78,5 @@ if __name__ == "__main__":
                 np.savetxt(os.path.join(directory, file_path + ".txt"), all_gcn_gt_J_flat, fmt="%.6f", delimiter=',')
             except Exception as e:
                 print(f"Error at batch {batch_idx}: {e}")
-                continue
+                break
     print("Processing complete.")

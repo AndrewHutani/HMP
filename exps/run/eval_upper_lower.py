@@ -54,8 +54,11 @@ lower_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt"
 upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "upper body")
 lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "lower body")
 
-upper_gcn = parse_gcn_data("mpjpe_log.txt", "upper body")
-lower_gcn = parse_gcn_data("mpjpe_log.txt", "lower body")
+upper_gcn = parse_physmop_data("gcnext_on_amass.txt", "upper body")
+lower_gcn = parse_physmop_data("gcnext_on_amass.txt", "lower body")
+
+print(upper_gcn.shape)
+print(lower_gcn.shape)
 
 # Aggregate by group
 def group_average(actions, action_data):
@@ -76,8 +79,8 @@ lower_physics = lower_physics[:, [0, 1, 4, 7]]
 upper_fusion = upper_fusion[:, [0, 1, 4, 7]]
 lower_fusion = lower_fusion[:, [0, 1, 4, 7]]
 
-upper_gcn = group_average(actions, upper_gcn)
-lower_gcn = group_average(actions, lower_gcn)
+# upper_gcn = group_average(actions, upper_gcn)
+# lower_gcn = group_average(actions, lower_gcn)
 
 # Compute relative MPJPE (percentage of first observation)
 def relative_mpjpe(avg):
@@ -87,16 +90,16 @@ upper_rel = relative_mpjpe(upper_data)
 lower_rel = relative_mpjpe(lower_data)
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
-x_vals = np.arange(1, len(upper_physics) + 1)
+x_vals = np.arange(1, len(upper_gcn) + 1)
 
 plt.figure(figsize=(10,6))
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(x_vals, upper_physics[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
-    plt.plot(x_vals, lower_physics[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
+    plt.plot(x_vals, upper_gcn[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
+    plt.plot(x_vals, lower_gcn[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
     # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Relative MPJPE (mm)")
-plt.title("Relative MPJPE for the Physics Branch vs. Observed Frames")
+plt.title("Relative MPJPE for the GCNext model vs. Observed Frames")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
