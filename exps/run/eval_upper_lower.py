@@ -11,6 +11,55 @@ static_actions = ["sitting", "sittingdown", "posing"]
 combination_actions =["Discussion", "Directions", "Phoning", "Eating", "Waiting"]
 dynamic_actions = ["walking", "walkingtogether", "walkingdog", "greeting"]
 
+def plot_and_save(upper_data, lower_data, model_name, branch, x_vals, colors, y_limits = None):
+    plt.figure(figsize=(10,6))
+    for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
+        plt.plot(x_vals, upper_data[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
+        plt.plot(x_vals, lower_data[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
+        # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
+    plt.xlabel("Number of Observed Frames")
+    plt.ylabel("Absolute MPJPE (mm)")
+    if model_name == "GCNext":
+        plt.title(f"Absolute MPJPE for the {model_name} model vs. Observed Frames")
+    else:
+        plt.title(f"Absolute MPJPE for the {branch} branch of the {model_name} model vs. Observed Frames")
+
+    # First legend
+    first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
+    second_line = Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms')
+    third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms')
+    fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
+
+    # Second legend
+    line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Upper")
+    line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Lower")
+
+
+    # Combine all handles and labels into one legend
+    all_handles = [
+        first_line, second_line, third_line, fourth_line,  # Timesteps/colors
+        line_solid, line_dashed,                           # Line types
+    ]
+    all_labels = [
+        '80ms', '400ms', '560ms', '1000ms',               # Timesteps/colors
+        'Upper', 'Lower',                                 # Line types
+    ]
+
+    plt.legend(
+        handles=all_handles,
+        labels=all_labels,
+        loc='upper right',
+        # bbox_to_anchor=(1.6, 1.0),
+        title='Predicted Timesteps into the Future'
+    )
+    plt.grid(True)
+    plt.tight_layout()
+    if y_limits is not None:
+        plt.ylim(y_limits)
+    save_name = f"mpjpe_{model_name.lower()}_{branch.lower()}_upper_lower.png"
+    plt.savefig(save_name)
+    plt.close()
+
 # Parse the data
 def parse_physmop_data(filename, body_part):
     data = []
@@ -54,11 +103,12 @@ lower_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt"
 upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "upper body")
 lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "lower body")
 
-upper_gcn = parse_physmop_data("gcnext_on_amass.txt", "upper body")
-lower_gcn = parse_physmop_data("gcnext_on_amass.txt", "lower body")
+upper_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "upper body")
+lower_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "lower body")
 
-print(upper_gcn.shape)
-print(lower_gcn.shape)
+upper_gcn = parse_gcn_data("mpjpe_log.txt", "upper body")
+lower_gcn = parse_gcn_data("mpjpe_log.txt", "lower body")
+print(upper_gcn_on_amass.shape, lower_gcn_on_amass.shape)
 
 # Aggregate by group
 def group_average(actions, action_data):
@@ -70,7 +120,8 @@ def group_average(actions, action_data):
         return np.mean(np.stack(group), axis=0)  # shape: (50, 4)
     else:
         return None
-
+upper_gcn = group_average(actions, upper_gcn)
+lower_gcn = group_average(actions, lower_gcn)
 
 upper_data = upper_data[:, [0, 1, 4, 7]]
 lower_data = lower_data[:, [0, 1, 4, 7]]
@@ -79,56 +130,25 @@ lower_physics = lower_physics[:, [0, 1, 4, 7]]
 upper_fusion = upper_fusion[:, [0, 1, 4, 7]]
 lower_fusion = lower_fusion[:, [0, 1, 4, 7]]
 
-# upper_gcn = group_average(actions, upper_gcn)
-# lower_gcn = group_average(actions, lower_gcn)
-
-# Compute relative MPJPE (percentage of first observation)
-def relative_mpjpe(avg):
-    return 100 * avg / avg[0]  # shape: (50, 4)
-
-upper_rel = relative_mpjpe(upper_data)
-lower_rel = relative_mpjpe(lower_data)
-
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
+x_vals = np.arange(1, len(upper_data) + 1)
+
+all_arrays = [
+    upper_data, lower_data,
+    upper_physics, lower_physics,
+    upper_fusion, lower_fusion,
+    upper_gcn, lower_gcn
+]
+all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
+y_min = 0
+y_max = np.percentile(all_data, 99.5)
+y_limits = (y_min, y_max)
+
+plot_and_save(upper_data, lower_data, "PhysMoP", "Data", x_vals, colors, y_limits)
+plot_and_save(upper_physics, lower_physics, "PhysMoP", "Physics", x_vals, colors, y_limits)
+plot_and_save(upper_fusion, lower_fusion, "PhysMoP", "Fusion", x_vals, colors, y_limits)
+
 x_vals = np.arange(1, len(upper_gcn) + 1)
-
-plt.figure(figsize=(10,6))
-for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(x_vals, upper_gcn[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
-    plt.plot(x_vals, lower_gcn[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
-    # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
-plt.xlabel("Number of Observed Frames")
-plt.ylabel("Relative MPJPE (mm)")
-plt.title("Relative MPJPE for the GCNext model vs. Observed Frames")
-
-# First legend
-first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
-second_line = Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms')
-third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms')
-fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
-
-# Second legend
-line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Upper")
-line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Lower")
-# line_dotted = Line2D([], [], color='black', linestyle='-.', linewidth=1.5, label="Physics")
-
-# Combine all handles and labels into one legend
-all_handles = [
-    first_line, second_line, third_line, fourth_line,  # Timesteps/colors
-    line_solid, line_dashed, #line_dotted               # Line types
-]
-all_labels = [
-    '80ms', '400ms', '560ms', '1000ms',               # Timesteps/colors
-    'Upper', 'Lower', #'Physics'                       # Line types
-]
-
-plt.legend(
-    handles=all_handles,
-    labels=all_labels,
-    loc='best',
-    # bbox_to_anchor=(1.6, 1.0),
-    title='Predicted Timesteps into the Future'
-)
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+print(upper_gcn.shape, lower_gcn.shape)
+plot_and_save(upper_gcn, lower_gcn, "GCNext", "Data", x_vals, colors, y_limits)
+plot_and_save(upper_gcn_on_amass, lower_gcn_on_amass, "GCNext on AMASS", "Data on AMASS", x_vals, colors, y_limits)
