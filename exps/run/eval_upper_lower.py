@@ -54,6 +54,7 @@ def plot_and_save(upper_data, lower_data, model_name, branch, x_vals, colors, y_
     )
     plt.grid(True)
     plt.tight_layout()
+    plt.yscale('log')
     if y_limits is not None:
         plt.ylim(y_limits)
     save_name = f"mpjpe_{model_name.lower()}_{branch.lower()}_upper_lower.png"
@@ -140,8 +141,8 @@ all_arrays = [
     upper_gcn, lower_gcn
 ]
 all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
-y_min = 0
-y_max = np.percentile(all_data, 99.5)
+y_min = +0
+y_max = np.percentile(all_data, 100)
 y_limits = (y_min, y_max)
 
 plot_and_save(upper_data, lower_data, "PhysMoP", "Data", x_vals, colors, y_limits)
