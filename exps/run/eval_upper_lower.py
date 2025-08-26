@@ -141,7 +141,7 @@ all_arrays = [
     upper_gcn, lower_gcn
 ]
 all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
-y_min = +0
+y_min = np.min(all_data[all_data > 0])  # Avoid zero for log scale
 y_max = np.percentile(all_data, 100)
 y_limits = (y_min, y_max)
 
