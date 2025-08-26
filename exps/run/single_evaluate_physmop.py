@@ -11,6 +11,7 @@ import time
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 import torch.nn.functional as F
 
@@ -36,8 +37,7 @@ if __name__ == "__main__":
     mpjpe_physics_gt_all = []
     mpjpe_fusion_all = []
     # Process first walking sample
-    for batch_idx, batch in enumerate(data_loader):
-        print(f"Processing sample {batch_idx}")
+    for batch_idx, batch in enumerate(tqdm(data_loader, desc="Processing samples")):
         # print(f"Action: {batch['action'][0]}")
         # print(f"File: {batch['file_path'][0]}")
         # print("Batch keys:", batch.keys())
@@ -61,10 +61,10 @@ if __name__ == "__main__":
 
             if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
                 # Downsample: select frames at intervals
-                start_index = config.pred_length + int(config.hist_length * downsample_rate)
+                start_index = 0
                 # Generate indices for downsampling
-                num_hist_frames = config.hist_length
-                hist_indices = np.round(np.arange(-start_index, -config.pred_length, downsample_rate)).astype(int)
+                end_index = int(config.total_length * downsample_rate)
+                hist_indices = np.round(np.linspace(start_index, end_index, config.total_length)).astype(int)
                 processed_batch = {k: v[:, hist_indices, ...] if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
             
             elif downsample_rate < 1.0:
@@ -73,27 +73,17 @@ if __name__ == "__main__":
                 processed_batch = {}
                 for k, v in batch.items():
                     if k == 'q' and isinstance(v, torch.Tensor):
-                        v_spliced = v[:, :-config.pred_length, ...]
+                        v_spliced = v[:, :, ...]
                         orig_time_steps = v_spliced.shape[1]
                         new_time_steps = int(np.round(orig_time_steps * upsample_factor))
                         v_perm = v_spliced.permute(0, 2, 1)  # [batch, features, time]
                         v_upsampled = F.interpolate(v_perm, size=new_time_steps, mode='linear', align_corners=True)
                         v_upsampled = v_upsampled.permute(0, 2, 1)  # [batch, time, features]
-                        processed_batch[k] = v_upsampled[:, -config.hist_length:, ...]
+                        processed_batch[k] = v_upsampled[:, :config.total_length, ...]
                     else:
-                        processed_batch[k] = v[:, -config.hist_length:, ...]
+                        processed_batch[k] = v[:, :config.total_length, ...]
 
-            combined_batch = {}
-            predicted_batch = {k: v[:, -config.pred_length:, ...] if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-            for k in processed_batch.keys():
-                if isinstance(processed_batch[k], torch.Tensor) and isinstance(predicted_batch[k], torch.Tensor):
-                    # Concatenate along the frame/time dimension (usually dim=1)
-                    combined_batch[k] = torch.cat([processed_batch[k], predicted_batch[k]], dim=1)
-
-            # assert that the last config.pred_length frames are the same between combined and normal batch
-            assert torch.all(combined_batch['q'][:, -config.pred_length:, :] == normal_batch['q'][:, -config.pred_length:, :]), "Last frames do not match between combined and normal batch"
-
-            model_output, batch_info = realtime_model.predict(combined_batch)
+            model_output, batch_info = realtime_model.predict(processed_batch)
             gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
 
             # visualize_continuous_motion(gt_J, title="Ground Truth Motion", skeleton_type="amass")
