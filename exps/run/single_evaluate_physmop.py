@@ -97,8 +97,10 @@ if __name__ == "__main__":
             gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
 
             # visualize_continuous_motion(gt_J, title="Ground Truth Motion", skeleton_type="amass")
-            visualize_motion_with_ground_truth(pred_J_data.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Data)",
-                                                skeleton_type="amass", save_gif_path="output_{}.gif".format(downsample_rate))
+            # visualize_motion_with_ground_truth(pred_J_data.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Data)",
+            #                                     skeleton_type="amass", save_gif_path="output_data_{}.gif".format(downsample_rate))
+            # visualize_motion_with_ground_truth(pred_J_physics_gt.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Physics)",
+            #                                     skeleton_type="amass", save_gif_path="output_physics_{}.gif".format(downsample_rate))
             eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
 
 
@@ -108,7 +110,6 @@ if __name__ == "__main__":
             mpjpe_physics_results.append(mpjpe_physics_gt[selected_indices])  # shape: (4,)
             mpjpe_fusion = np.mean([eval_results['error_test_fusion_upper'][0], eval_results['error_test_fusion_lower'][0]], axis=0)
             mpjpe_fusion_results.append(mpjpe_fusion[selected_indices])  # shape: (4,)
-        break
         mpjpe_data_all.append(np.array(mpjpe_data_results))  # shape: (num_downsample_rates, 4)
         mpjpe_physics_gt_all.append(np.array(mpjpe_physics_results))  # shape: (num_downsample_rates, 4)
         mpjpe_fusion_all.append(np.array(mpjpe_fusion_results))  # shape: (num_downsample_rates, 4)
@@ -136,6 +137,17 @@ if __name__ == "__main__":
         "fusion": "mpjpe_vs_downsample_rate_fusion.png"
     }
 
+    all_arrays = [
+    mpjpe_data_all,
+    mpjpe_physics_gt_all,
+    mpjpe_fusion_all
+    ]
+
+    all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
+    y_min = np.min(all_data[all_data > 0])  # Avoid zero for log scale
+    y_max = np.percentile(all_data, 100)
+    y_limits = (y_min, y_max)
+
     for branch, results in branch_results.items():
         plt.figure()
         for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
@@ -146,5 +158,6 @@ if __name__ == "__main__":
         plt.gca().invert_xaxis()
         plt.grid(True)
         plt.legend(title='Timesteps into the future')
+        plt.ylim(y_limits)
         plt.savefig(branch_filenames[branch])
         plt.close()

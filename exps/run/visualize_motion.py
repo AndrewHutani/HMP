@@ -192,6 +192,7 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
 
     if save_gif_path:
         ani.save(save_gif_path, writer=PillowWriter(fps=10))
+        plt.close()
     else:
         while True:
             plt.show()
