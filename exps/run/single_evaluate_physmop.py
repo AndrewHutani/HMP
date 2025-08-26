@@ -96,9 +96,9 @@ if __name__ == "__main__":
             model_output, batch_info = realtime_model.predict(combined_batch)
             gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
 
-            # visualize_continuous_motion(gt_J, title="Ground Truth Motion", skeleton_type="amass", save_gif_path="gt_motion_{}.gif".format(downsample_rate))
-            # visualize_motion_with_ground_truth(pred_J_data.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Data)",
-            #                                     skeleton_type="amass", save_gif_path="output.gif")
+            # visualize_continuous_motion(gt_J, title="Ground Truth Motion", skeleton_type="amass")
+            visualize_motion_with_ground_truth(pred_J_data.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Data)",
+                                                skeleton_type="amass", save_gif_path="output_{}.gif".format(downsample_rate))
             eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
 
 
@@ -108,6 +108,7 @@ if __name__ == "__main__":
             mpjpe_physics_results.append(mpjpe_physics_gt[selected_indices])  # shape: (4,)
             mpjpe_fusion = np.mean([eval_results['error_test_fusion_upper'][0], eval_results['error_test_fusion_lower'][0]], axis=0)
             mpjpe_fusion_results.append(mpjpe_fusion[selected_indices])  # shape: (4,)
+        break
         mpjpe_data_all.append(np.array(mpjpe_data_results))  # shape: (num_downsample_rates, 4)
         mpjpe_physics_gt_all.append(np.array(mpjpe_physics_results))  # shape: (num_downsample_rates, 4)
         mpjpe_fusion_all.append(np.array(mpjpe_fusion_results))  # shape: (num_downsample_rates, 4)
