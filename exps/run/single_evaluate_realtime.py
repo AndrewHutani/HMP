@@ -2,6 +2,8 @@ import time
 import torch
 import numpy as np
 import argparse
+
+from tqdm import tqdm
 from config import config
 
 from realtime import RealTimePrediction
@@ -149,28 +151,54 @@ for walking_sample, _ in dataset.get_full_sequences_for_action(action):
     downsample_rates = np.arange(3, 0.1, -0.2)  # From 3 to 0.1, step -0.2
 
 
-    for downsample_rate in downsample_rates:
-        print(f"Downsample rate: {downsample_rate:.2f}")
-        total_length = config.motion.h36m_input_length + config.motion.h36m_target_length_eval
+    # ...existing code...
 
-        # Compute the maximum valid start index to avoid overflow
+    input_len = config.motion.h36m_input_length
+    output_len = config.motion.h36m_target_length_eval
+
+    for downsample_rate in downsample_rates:
+        mpjpe_data_per_downsample_rate = []
+        print(f"Downsample rate: {downsample_rate:.2f}")
+        total_length = input_len + output_len
+
+        # Compute the maximum valid start index for the window
         if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
-            max_end_index = int(total_length * downsample_rate)
+            max_end_index = int(input_len * downsample_rate) + output_len
             max_start_idx = walking_sample.shape[0] - max_end_index
             max_start_idx = max(0, max_start_idx)
         else:
-            # For upsampling, just ensure you don't start past the end
             max_start_idx = walking_sample.shape[0] - total_length
             max_start_idx = max(0, max_start_idx)
 
         stride = 1
-        mpjpe_data_per_downsample_rate = []
-        for start_idx in range(0, max_start_idx + 1, stride):
-            walking_sample_resampled = resample_sequence(walking_sample, downsample_rate, total_length, start_idx=start_idx)
+        print(f"Max start idx: {max_start_idx}")
+        for start_idx in tqdm(range(0, max_start_idx + 1, stride), desc="Processing"):
+            # 1. Resample only the input part
+            input_indices = np.round(np.linspace(start_idx, start_idx + input_len * downsample_rate, input_len)).astype(int)
+            input_indices = np.clip(input_indices, 0, walking_sample.shape[0] - 1)
+            input_resampled = walking_sample[input_indices]
+
+            # 2. The last index of the input
+            last_input_idx = input_indices[-1]
+
+            # 3. Output: take the next output_len frames at original rate
+            output_start = last_input_idx + 1
+            output_end = output_start + output_len
+            # Make sure we don't go out of bounds
+            if output_end > walking_sample.shape[0]:
+                break
+            output = walking_sample[output_start:output_end]
+
+            # 4. Concatenate for evaluation
+            walking_sample_resampled = torch.cat([input_resampled, output], dim=0)
             test_input_ = walking_sample_resampled[:config.motion.h36m_input_length]
             ground_truth = walking_sample_resampled[config.motion.h36m_input_length:]
             realtime_predictor.batch_predict(test_input_, ground_truth, visualize=False, debug=False)
             mpjpe_data = realtime_predictor.evaluate() # Shape (4, )
+            # visualize_continuous_motion(walking_sample_resampled, skeleton_type='h36m',
+            #                             save_gif_path='output_{}.gif'.format(downsample_rate))
+
+
             mpjpe_data_per_downsample_rate.append(mpjpe_data)
             # visualize_continuous_motion(walking_sample_resampled, skeleton_type='h36m',
             #                             save_gif_path='output_{}.gif'.format(downsample_rate))
