@@ -38,9 +38,11 @@ def resample_sequence(sequence, downsample_rate, total_length, start_idx = 0):
     else:
         # Upsample: interpolate to more frames
         upsample_factor = 1.0 / downsample_rate
-        orig_time_steps = sequence.shape[0]
+        # Slice the sequence at start_idx before upsampling
+        seq_slice = sequence[start_idx : start_idx + total_length]
+        orig_time_steps = seq_slice.shape[0]
         new_time_steps = int(np.round(orig_time_steps * upsample_factor))
-        seq_perm = sequence.permute(1, 2, 0)  # [num_joints, 3, time]
+        seq_perm = seq_slice.permute(1, 2, 0)  # [num_joints, 3, time]
         seq_upsampled = F.interpolate(seq_perm, size=new_time_steps, mode='linear', align_corners=True)
         seq_upsampled = seq_upsampled.permute(2, 0, 1)  # [time, num_joints, 3]
         return seq_upsampled[:total_length]
@@ -128,36 +130,67 @@ action = "walking"  # Change this to the action you want to evaluate
 
 config.motion.h36m_target_length = config.motion.h36m_target_length_eval
 dataset = H36MEval(config, 'test')
-walking_sample, root_sample = dataset.get_full_sequences_for_action(action)[0]
+mpjpe_data_all = []
+for walking_sample, _ in dataset.get_full_sequences_for_action(action):
+    # walking_sample, root_sample = dataset.get_full_sequences_for_action(action)[0]
 # print("Walking sample shape: ", walking_sample.shape)
 # print("Root sample shape: ", root_sample.shape)
 # print("Root sample: ", root_sample[:, 0, :])
+    mpjpe_data_per_sample = []
 
-realtime_predictor = RealTimeGlobalPrediction(model, config, tau=0.5)
-visualize = False
-debug = False
-
-
-all_observed_motion = []
-all_predicted_motion = []
-latency_times = []
-downsample_rates = np.arange(3, 0.1, -0.2)  # From 3 to 0.1, step -0.2
+    realtime_predictor = RealTimeGlobalPrediction(model, config, tau=0.5)
+    visualize = False
+    debug = False
 
 
-for downsample_rate in downsample_rates:
-    print(f"Downsample rate: {downsample_rate:.2f}")
-    total_length = config.motion.h36m_target_length + config.motion.h36m_target_length_eval  # or your desired length
-    walking_sample_resampled = resample_sequence(walking_sample, downsample_rate, total_length, start_idx=100)
-    print("Resampled walking sample shape: ", walking_sample_resampled.shape)
-    visualize_continuous_motion(walking_sample_resampled, title="Ground Truth Motion", skeleton_type="h36m",
-                                save_gif_path="output_ground_truth_{}.gif".format(downsample_rate))
+    all_observed_motion = []
+    all_predicted_motion = []
+    latency_times = []
+    downsample_rates = np.arange(3, 0.1, -0.2)  # From 3 to 0.1, step -0.2
 
-# for i in range(walking_sample.shape[0] - config.motion.h36m_target_length):
-# # for i in range(100):
-#     test_input_ = walking_sample[i]
-#     ground_truth = walking_sample[i:i+config.motion.h36m_target_length]
-#     realtime_predictor.predict(test_input_, ground_truth, visualize, debug)
-#     global_observed_motion = realtime_predictor.add_global_translation()  # Add global translation to the predicted motion
 
-#     all_observed_motion.append(global_observed_motion[-config.motion.h36m_target_length:])
-#     all_predicted_motion.append(realtime_predictor.predicted_motion)
+    for downsample_rate in downsample_rates:
+        print(f"Downsample rate: {downsample_rate:.2f}")
+        total_length = config.motion.h36m_input_length + config.motion.h36m_target_length_eval
+
+        # Compute the maximum valid start index to avoid overflow
+        if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
+            max_end_index = int(total_length * downsample_rate)
+            max_start_idx = walking_sample.shape[0] - max_end_index
+            max_start_idx = max(0, max_start_idx)
+        else:
+            # For upsampling, just ensure you don't start past the end
+            max_start_idx = walking_sample.shape[0] - total_length
+            max_start_idx = max(0, max_start_idx)
+
+        stride = 1
+        mpjpe_data_per_downsample_rate = []
+        for start_idx in range(0, max_start_idx + 1, stride):
+            walking_sample_resampled = resample_sequence(walking_sample, downsample_rate, total_length, start_idx=start_idx)
+            test_input_ = walking_sample_resampled[:config.motion.h36m_input_length]
+            ground_truth = walking_sample_resampled[config.motion.h36m_input_length:]
+            realtime_predictor.batch_predict(test_input_, ground_truth, visualize=False, debug=False)
+            mpjpe_data = realtime_predictor.evaluate() # Shape (4, )
+            mpjpe_data_per_downsample_rate.append(mpjpe_data)
+            # visualize_continuous_motion(walking_sample_resampled, skeleton_type='h36m',
+            #                             save_gif_path='output_{}.gif'.format(downsample_rate))
+        mpjpe_data_per_sample.append(np.mean(np.array(mpjpe_data_per_downsample_rate), axis=0))
+    mpjpe_data_all.append(np.array(mpjpe_data_per_sample))
+print(np.array(mpjpe_data_all).shape)
+mpjpe_data_all = np.mean(np.array(mpjpe_data_all), axis=0)  # shape: (num_downsample_rates, 4)
+
+np.savetxt("mpjpe_data_all.txt", mpjpe_data_all, delimiter=",")
+
+plt.figure()
+for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
+    plt.plot(downsample_rates, mpjpe_data_all[:, i], marker='o', label=label)
+plt.xlabel('Downsample Rate')
+plt.ylabel('Mean MPJPE')
+plt.title("MPJPE for the GCNext model vs Downsample Rate")
+plt.gca().invert_xaxis()
+plt.grid(True)
+plt.legend(title='Timesteps into the future')
+# plt.ylim(y_limits)
+# plt.savefig(branch_filenames[branch])
+plt.show()
+# plt.close()

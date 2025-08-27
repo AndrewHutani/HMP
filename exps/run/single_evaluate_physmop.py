@@ -111,26 +111,32 @@ if __name__ == "__main__":
     mpjpe_fusion_all = np.array(mpjpe_fusion_all)  # shape: (num_samples, num_downsample_rates, 4)
     mpjpe_fusion_all = np.mean(mpjpe_fusion_all, axis=0)  # shape: (num_downsample_rates, 4)
 
+    mjpe_gcnext_all = np.loadtxt("mpjpe_data_all.txt", delimiter=",")
+
     branch_results = {
         "data": mpjpe_data_all,
         "physics_gt": mpjpe_physics_gt_all,
-        "fusion": mpjpe_fusion_all
+        "fusion": mpjpe_fusion_all,
+        "gcnext": mjpe_gcnext_all
     }
     branch_titles = {
         "data": "MPJPE for the data branch vs Downsample Rate",
         "physics_gt": "MPJPE for the physics branch vs Downsample Rate",
-        "fusion": "MPJPE for the fusion branch vs Downsample Rate"
+        "fusion": "MPJPE for the fusion branch vs Downsample Rate",
+        "gcnext": "MPJPE for the GCNext model vs Downsample Rate"
     }
     branch_filenames = {
         "data": "mpjpe_vs_downsample_rate_data.png",
         "physics_gt": "mpjpe_vs_downsample_rate_physics.png",
-        "fusion": "mpjpe_vs_downsample_rate_fusion.png"
+        "fusion": "mpjpe_vs_downsample_rate_fusion.png",
+        "gcnext": "mpjpe_vs_downsample_rate_gcnext.png"
     }
 
     all_arrays = [
     mpjpe_data_all,
     mpjpe_physics_gt_all,
-    mpjpe_fusion_all
+    mpjpe_fusion_all,
+    mjpe_gcnext_all
     ]
 
     all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
