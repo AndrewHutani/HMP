@@ -28,7 +28,9 @@ selected_indices = [t + config.hist_length - 1 for t in time_idx]
 
 ds = "AMASS" 
 if __name__ == "__main__":
-    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
+    print("Using config.hist_length: ", config.hist_length)
+
+    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2025_08_14-19_13_02_27155.pt', device='cpu')
 
     log_files = ["physmop_data_mpjpe_log.txt", "physmop_physics_mpjpe_log.txt", "physmop_fusion_mpjpe_log.txt"]
     log_file_handles = [open(f, "w") for f in log_files]  # Open all files once in write mode

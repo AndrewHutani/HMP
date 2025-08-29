@@ -43,6 +43,7 @@ class RealtimePhysMop:
                                        device=self.device
                                        ).to(self.device)
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        print("Checkpoint keys:", checkpoint['model']['regressor.motion_fc_out.weight'].shape)
         self.model.load_state_dict(checkpoint['model'], strict=True)
         self.model.eval()
 

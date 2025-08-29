@@ -68,7 +68,7 @@ class Regression(nn.Module):
         config.motion_mlp.num_layers = 48        
         self.motion_fc_in = nn.Linear(config.dim, config.dim)
         self.motion_mlp = build_mlps(config.motion_mlp)
-        self.motion_fc_out = nn.Linear(config.dim, config.dim)
+        self.motion_fc_out = nn.Linear(config.hist_length * config.dim, config.pred_length * config.dim)
 
         ## physics branch
         config.motion_mlp.seq_len = 3
@@ -161,11 +161,14 @@ class Regression(nn.Module):
         motion_pred_data = torch.zeros([B, config.total_length, D]).float().to(motion_input.device)
         if self.data or fusion:
             motion_pred_data[:, :config.hist_length] = motion_input
-            motion_pred_data[:, config.hist_length:] = self.motion_fc_out(motion_feats) + motion_pred_data[:, config.hist_length-1:config.hist_length]
-            t2 = time.perf_counter()
-            pred_time.append(t2-t1)
-            # print(f"Data-driven prediction time: {t1-t0} seconds")
-            # prediction_times.append(t1-t0)  # Store the prediction time
+            # Flatten the history features for each batch
+            motion_feats_flat = motion_feats.reshape(B, -1)  # [B, hist_length * dim]
+            # Predict all future frames at once
+            motion_pred_future = self.motion_fc_out(motion_feats_flat)  # [B, pred_length * dim]
+            motion_pred_future = motion_pred_future.view(B, config.pred_length, config.dim)
+            motion_pred_data[:, config.hist_length:] = motion_pred_future
+            # motion_pred_data[:, config.hist_length:] = self.motion_fc_out(motion_feats) + motion_pred_data[:, config.hist_length-1:config.hist_length]
+
         
         ## physics-driven and fusion
         pred_q_ddot_physics_gt = torch.zeros([B, config.total_length-2, D]).float().to(motion_input.device)
@@ -206,6 +209,7 @@ class Regression(nn.Module):
             # prediction_times.append(t1-t0)
 
         ## fusion
+        fusion = False
         if fusion:
             t0 = time.perf_counter()
             time_idx = torch.arange(config.pred_length).float().to(motion_input.device).expand(B, -1) / config.pred_length
@@ -231,7 +235,7 @@ class PhysMoP(nn.Module):
     def __init__(
             self,
             hist_length,
-            physics=True, 
+            physics=False, 
             data=True,
             fusion=False, 
             device = None
@@ -250,7 +254,6 @@ class PhysMoP(nn.Module):
         # gt_mesh: NxTx6890x3
         # gt_q: NxTx63
         gt_q = gt_q.reshape([-1, config.total_length, 63])
-
         # This implicitly calss the forward method of the regressor
         motion_pred_data, motion_pred_physics_gt, motion_pred_physics_pred, motion_pred_fusion, pred_q_ddot_physics_gt, weight_t = self.regressor(gt_q[:, :self.hist_length], gt_q, mode, self.fusion)
         _, pred_q_ddot_data, _ = smoothness_constraint(motion_pred_data.clone(), constants.dt)
