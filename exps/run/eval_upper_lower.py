@@ -103,6 +103,8 @@ upper_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt"
 lower_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
 upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "upper body")
 lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "lower body")
+upper_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "upper body")
+lower_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "lower body")
 
 upper_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "upper body")
 lower_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "lower body")
@@ -138,7 +140,8 @@ all_arrays = [
     upper_data, lower_data,
     upper_physics, lower_physics,
     upper_fusion, lower_fusion,
-    upper_gcn, lower_gcn
+    upper_gcn, lower_gcn,
+    upper_data_longer, lower_data_longer
 ]
 all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
 y_min = np.min(all_data[all_data > 0])  # Avoid zero for log scale
@@ -153,3 +156,4 @@ x_vals = np.arange(1, len(upper_gcn) + 1)
 print(upper_gcn.shape, lower_gcn.shape)
 plot_and_save(upper_gcn, lower_gcn, "GCNext", "Data", x_vals, colors, y_limits)
 plot_and_save(upper_gcn_on_amass, lower_gcn_on_amass, "GCNext on AMASS", "Data on AMASS", x_vals, colors, y_limits)
+plot_and_save(upper_data_longer, lower_data_longer, "PhysMoP", "Data (Longer)", x_vals, colors, y_limits)
