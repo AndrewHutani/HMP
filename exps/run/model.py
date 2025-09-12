@@ -11,6 +11,9 @@ class GCNext(nn.Module):
         self.config = copy.deepcopy(config)
         super(GCNext, self).__init__()
         seq = self.config.motion_mlp.seq_len
+        input_len = self.config.motion.h36m_input_length
+        input_len_dct = self.config.motion.h36m_input_length_dct
+        dim = self.config.motion.dim
 
 
         self.arr0 = Rearrange('b n d -> b d n')
@@ -24,17 +27,17 @@ class GCNext(nn.Module):
             self.motion_fc_in = nn.Linear(self.config.motion.h36m_input_length_dct, self.config.motion.h36m_input_length_dct)
         else:
             self.motion_fc_in = nn.Linear(self.config.motion.dim, self.config.motion.dim)   # nn.Linear(66,66)
-            self.in_weight = nn.Parameter(torch.eye(50, 50))
+            self.in_weight = nn.Parameter(torch.eye(input_len, input_len))
         if self.temporal_fc_out:
             self.motion_fc_out = nn.Linear(self.config.motion.h36m_input_length_dct, self.config.motion.h36m_input_length_dct)
         else:
             self.motion_fc_out = nn.Linear(self.config.motion.dim, self.config.motion.dim)  # nn.Linear(66,66)
-            self.out_weight = nn.Parameter(torch.eye(50, 50))
+            self.out_weight = nn.Parameter(torch.eye(input_len, input_len))
 
         self.reset_parameters()
 
 
-        self.mlp = nn.Parameter(torch.empty(50, 4))
+        self.mlp = nn.Parameter(torch.empty(input_len, 4))
         nn.init.xavier_uniform_(self.mlp, gain=1e-8)
         self.dyna_idx = dyna_idx
 

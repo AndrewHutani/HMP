@@ -256,7 +256,7 @@ def regress_pred(model, pbar, num_samples, joint_used_xyz, m_p3d_h36, tau):
         # visualize_all_timesteps(predicted_positions, ground_truth_positions, time_steps_indices)
         print(moition_input_.shape)
         print(predicted_positions.shape)
-        input_motion = moition_input_[:, time_steps_indices, :, :].reshape(-1, 32, 3).cpu().numpy()
+        # input_motion = moition_input_[:, time_steps_indices, :, :].reshape(-1, 32, 3).cpu().numpy()
         # visualize_motion_with_ground_truth(input_motion, time_steps_indices, title="Predicted vs Ground Truth Motion")
         if batch_idx == 0:
             visualize_all_timesteps(predicted_positions, ground_truth_positions, time_steps_indices, title="Output Motion", gif_path="predicted_vs_ground_truth.gif")
