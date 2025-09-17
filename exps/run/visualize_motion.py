@@ -57,7 +57,7 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
     elif skeleton_type == 'incomplete_h36m':
         connections = incomplete_h36m_connections
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(19, 10))
     ax = fig.add_subplot(111, projection='3d')
 
     def update(frame_idx):
@@ -69,16 +69,33 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         ax.set_ylabel("Y")
         ax.set_zlabel("Z")
         ax.set_title(f"Frame {frame_idx}: {motion_sequence[frame_idx, 0]}")
+        ax.grid(False)
+            # Optional: Remove axis panes (background planes)
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+        
+        # Optional: Make pane edges transparent
+        ax.xaxis.pane.set_edgecolor('w')
+        ax.yaxis.pane.set_edgecolor('w')
+        ax.zaxis.pane.set_edgecolor('w')
+        
+        # Optional: Remove axis lines
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_zticks([])
         joints = motion_sequence[frame_idx]
+        ax.view_init(elev=8.7, azim=-108.7)
+
         # Add artificial origin as the last joint
         joints_with_origin = np.vstack([joints, np.array([0, 0, 0])])
-        ax.scatter(joints_with_origin[:, 0], joints_with_origin[:, 1], joints_with_origin[:, 2], c='r', marker='o')
+        # ax.scatter(joints_with_origin[:, 0], joints_with_origin[:, 1], joints_with_origin[:, 2], c='r', marker='o')
         if skeleton_type is not None:
             for connection in connections:
                 joint1, joint2 = connection
                 ax.plot([joints_with_origin[joint1, 0], joints_with_origin[joint2, 0]],
-                        [joints_with_origin[joint1, 1], joints_with_origin[joint2, 1]],
-                        [joints_with_origin[joint1, 2], joints_with_origin[joint2, 2]], 'r', alpha=0.5)
+                        [-joints_with_origin[joint1, 2], -joints_with_origin[joint2, 2]],
+                        [joints_with_origin[joint1, 1], joints_with_origin[joint2, 1]], 'r', alpha=1)
         else:
             for joint_idx, (x, y, z) in enumerate(joints):
                 ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
