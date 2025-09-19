@@ -67,6 +67,30 @@ def group_average(actions, action_data):
         return np.mean(np.stack(group), axis=0)  # shape: (50, 4)
     else:
         return None
+    
+def find_diminishing_returns_percentage(data, improvement_threshold=2.0):
+    """Find where percentage improvement drops below threshold"""
+    diminishing_points = []
+    
+    for timestep in range(data.shape[1]):
+        timeseries = data[:, timestep]
+        percentage_improvements = []
+        
+        for i in range(1, len(timeseries)):
+            if timeseries[i-1] != 0:  # Avoid division by zero
+                improvement = abs((timeseries[i-1] - timeseries[i]) / timeseries[i-1] * 100)
+                percentage_improvements.append(improvement)
+            else:
+                percentage_improvements.append(0)
+        
+        # Find first point where improvement drops below threshold
+        below_threshold = np.where(np.array(percentage_improvements) < improvement_threshold)[0]
+        if len(below_threshold) > 0:
+            diminishing_points.append(below_threshold[0] + 1)  # +1 because we started from index 1
+        else:
+            diminishing_points.append(len(data) - 1)
+    
+    return diminishing_points
 
 
 upper_data = upper_data[:, [0, 1, 4, 7]]
@@ -78,6 +102,14 @@ lower_fusion = lower_fusion[:, [0, 1, 4, 7]]
 
 upper_gcn = group_average(actions, upper_gcn)
 lower_gcn = group_average(actions, lower_gcn)
+
+
+upper_diminishing_pct = find_diminishing_returns_percentage(upper_gcn, improvement_threshold=1.0)
+lower_diminishing_pct = find_diminishing_returns_percentage(lower_gcn, improvement_threshold=1.0)
+
+
+print("Upper body diminishing returns (1% threshold) at frames:", upper_diminishing_pct)
+print("Lower body diminishing returns (1% threshold) at frames:", lower_diminishing_pct)
 
 # Compute relative MPJPE (percentage of first observation)
 def relative_mpjpe(avg):
