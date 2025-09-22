@@ -40,7 +40,7 @@ class RealtimePhysMop:
                                        physics=True,
                                        data=True,
                                        fusion=True,
-                                       device=self.device
+                                    #    device=self.device
                                        ).to(self.device)
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model'], strict=True)

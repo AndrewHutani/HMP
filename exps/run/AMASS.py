@@ -126,7 +126,7 @@ import pickle
 
 amass_dir = 'data/amass'
 save_dir = 'data/data_processed'
-seqlen = 50
+seqlen = 45
 
 smooth_sigma = 6
 smooth_sigma_va = 8
