@@ -12,13 +12,13 @@ from datasets.h36m_eval import H36MEval
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-84000.pth", help='=encoder path')
+parser.add_argument('--model-pth', type=str, default="ckpt/baseline/hist_length_8.pth", help='=encoder path')
 parser.add_argument('--dyna', nargs='+', type=int, default=[0, 48], help='dynamic layer index')
 args = parser.parse_args()
 
 # Prepare model
 model = Model(config, args.dyna)
-state_dict = torch.load(args.model_pth)
+state_dict = torch.load(args.model_pth, map_location='cpu')
 model.load_state_dict(state_dict, strict=True)
 
 
@@ -29,7 +29,7 @@ actions = ["walking", "eating",
             "walkingtogether"
             ]
 
-log_filename = "mpjpe_log.txt"
+log_filename = "gcnext_hist_length_8.txt"
 with open(log_filename, "w") as log_file:
     for action in actions:
         print(f"Evaluating action: {action}")
