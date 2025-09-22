@@ -296,7 +296,6 @@ class RealTimePrediction():
                 motion_input = motion_window[:, self.joint_used_xyz, :].reshape(1, input_length, -1)
             with torch.no_grad():
                 if config.deriv_input:
-                    print("Types of matrices:", self.dct_m.dtype, motion_input.dtype)
                     motion_input_ = torch.matmul(self.dct_m[:, :input_length, :], motion_input)
                 else:
                     motion_input_ = motion_input

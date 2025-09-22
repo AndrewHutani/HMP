@@ -91,25 +91,59 @@ if __name__ == "__main__":
     log_files = ["physmop_data_mpjpe_log.txt", "physmop_physics_mpjpe_log.txt", "physmop_fusion_mpjpe_log.txt"]
     for i, log_file in enumerate(log_file_handles):
         if i == 0:
-            mpjpe_mean_upper = np.mean(mpjpe_data_upper, axis=0) # shape: (obs_len, 8)
-            mpjpe_mean_lower = np.mean(mpjpe_data_lower, axis=0)  # shape: (obs_len, 8)
+            mpjpe_mean_upper = np.mean(mpjpe_data_upper, axis=0)
+            mpjpe_std_upper = np.std(mpjpe_data_upper, axis=0)
+            mpjpe_mean_lower = np.mean(mpjpe_data_lower, axis=0)
+            mpjpe_std_lower = np.std(mpjpe_data_lower, axis=0)
+            percentile_25_upper = np.percentile(mpjpe_data_upper, 25, axis=0)
+            percentile_75_upper = np.percentile(mpjpe_data_upper, 75, axis=0)
+            percentile_25_lower = np.percentile(mpjpe_data_lower, 25, axis=0)
+            percentile_75_lower = np.percentile(mpjpe_data_lower, 75, axis=0)
         elif i == 1:
             mpjpe_mean_upper = np.mean(mpjpe_physics_gt_upper, axis=0)
+            mpjpe_std_upper = np.std(mpjpe_physics_gt_upper, axis=0)
             mpjpe_mean_lower = np.mean(mpjpe_physics_gt_lower, axis=0)
+            mpjpe_std_lower = np.std(mpjpe_physics_gt_lower, axis=0)
+            percentile_25_upper = np.percentile(mpjpe_physics_gt_upper, 25, axis=0)
+            percentile_75_upper = np.percentile(mpjpe_physics_gt_upper, 75, axis=0)
+            percentile_25_lower = np.percentile(mpjpe_physics_gt_lower, 25, axis=0)
+            percentile_75_lower = np.percentile(mpjpe_physics_gt_lower, 75, axis=0)
+
         else:
             mpjpe_mean_upper = np.mean(mpjpe_fusion_upper, axis=0)
+            mpjpe_std_upper = np.std(mpjpe_fusion_upper, axis=0)
             mpjpe_mean_lower = np.mean(mpjpe_fusion_lower, axis=0)
+            mpjpe_std_lower = np.std(mpjpe_fusion_lower, axis=0)
+            percentile_25_upper = np.percentile(mpjpe_fusion_upper, 25, axis=0)
+            percentile_75_upper = np.percentile(mpjpe_fusion_upper, 75, axis=0)
+            percentile_25_lower = np.percentile(mpjpe_fusion_lower, 25, axis=0)
+            percentile_75_lower = np.percentile(mpjpe_fusion_lower, 75, axis=0)
 
         # Write to log file
-
         log_file.write(f"Averaged MPJPE (upper body) for each observation length and each selected timestep:\n")
         for obs_len in range(mpjpe_mean_upper.shape[0]):
             log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mpjpe_mean_upper[obs_len]]) + "]\n")
+            log_file.write(f"Std {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mpjpe_std_upper[obs_len]]) + "]\n")
         log_file.write("\n")
         log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep:\n")
         for obs_len in range(mpjpe_mean_lower.shape[0]):
             log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mpjpe_mean_lower[obs_len]]) + "]\n")
+            log_file.write(f"Std {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mpjpe_std_lower[obs_len]]) + "]\n")
         log_file.write("\n")
+
+        log_file.write(f"25th percentile (upper body) for each observation length and each selected timestep:\n")
+        for obs_len in range(percentile_25_upper.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in percentile_25_upper[obs_len]]) + "]\n")
+        log_file.write(f"75th percentile (upper body) for each observation length and each selected timestep:\n")
+        for obs_len in range(percentile_75_upper.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in percentile_75_upper[obs_len]]) + "]\n")
+        
+        log_file.write(f"25th percentile MPJPE (lower body) for each observation length and each selected timestep:\n")
+        for obs_len in range(percentile_25_lower.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in percentile_25_lower[obs_len]]) + "]\n")
+        log_file.write(f"75th percentile MPJPE (lower body) for each observation length and each selected timestep:\n")
+        for obs_len in range(percentile_75_lower.shape[0]):
+            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in percentile_75_lower[obs_len]]) + "]\n")
 
     # Close all log files at the end
     for log_file in log_file_handles:
