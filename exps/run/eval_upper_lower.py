@@ -7,9 +7,6 @@ actions = ["walking", "eating", "smoking", "discussion", "directions",
                         "greeting", "phoning", "posing", "purchases", "sitting",
                         "sittingdown", "takingphoto", "waiting", "walkingdog",
                         "walkingtogether"]
-static_actions = ["sitting", "sittingdown", "posing"]
-combination_actions =["Discussion", "Directions", "Phoning", "Eating", "Waiting"]
-dynamic_actions = ["walking", "walkingtogether", "walkingdog", "greeting"]
 
 # Parse the data
 def parse_physmop_data(filename, body_part):
