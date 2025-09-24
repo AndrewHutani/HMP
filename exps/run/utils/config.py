@@ -2,6 +2,7 @@ from os.path import join
 from easydict import EasyDict as edict
 
 hist_length = 12
+hist_length = 8
 pred_length = 25
 total_length = hist_length + pred_length
 
