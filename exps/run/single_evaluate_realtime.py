@@ -85,51 +85,33 @@ parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-8
 parser.add_argument('--dyna', nargs='+', type=int, default=[0, 48], help='dynamic layer index')
 args = parser.parse_args()
 
+
+
+config.motion.h36m_target_length = config.motion.h36m_target_length_eval
+dataset = H36MEval(config, 'test')
+walking_sample, root_sample = dataset.get_full_sequences_for_action("walking")[0]
+
 # Prepare model
 model = Model(config, args.dyna)
 state_dict = torch.load(args.model_pth, map_location = torch.device("cpu"))
 model.load_state_dict(state_dict, strict=True)
 model.to(torch.device("cpu"))  # Use CPU for inference
-
-
-actions = ["walking", "eating", "smoking", "discussion", "directions",
-                        "greeting", "phoning", "posing", "purchases", "sitting",
-                        "sittingdown", "takingphoto", "waiting", "walkingdog",
-                        "walkingtogether"]
-
-action = "walking"  # Change this to the action you want to evaluate
-
-config.motion.h36m_target_length = config.motion.h36m_target_length_eval
-dataset = H36MEval(config, 'test')
-walking_sample, root_sample = dataset.get_full_sequences_for_action(action)[0]
-# print("Walking sample shape: ", walking_sample.shape)
-# print("Root sample shape: ", root_sample.shape)
-# print("Root sample: ", root_sample[:, 0, :])
-amass_sample = np.loadtxt("ordered_gt_J.txt", delimiter=',')
-amass_sample = amass_sample.reshape(-1, 22, 3)  # Reshape to [num_frames, num_joints, 3]
-# the xyz axes are also not in the same order so reorder them
-amass_sample = np.stack((amass_sample[:, :, 1], 
-                               amass_sample[:, :, 2],
-                               amass_sample[:, :, 0]), axis=2)  # [num_frames, num_joints, 3]
-print("AMASS sample shape: ", amass_sample.shape)
-
-
 realtime_predictor = RealTimeGlobalPrediction(model, config, tau=0.5)
-visualize = False
-debug = False
 
+latency_times = []
 
-# for i in range(walking_sample.shape[0] - config.motion.h36m_target_length):
-# for i in range(100):
-idx = 2
-test_input_ = torch.tensor(amass_sample[(idx*config.motion.h36m_input_length):((idx+1)*config.motion.h36m_input_length)],  dtype=torch.float32)
-print(f"Test input shape: {test_input_.shape}")
-ground_truth = torch.tensor(amass_sample[(idx+1)*config.motion.h36m_input_length:((idx+1)*config.motion.h36m_input_length + config.motion.h36m_target_length)], dtype=torch.float32)
-realtime_predictor.batch_predict(test_input_, ground_truth, visualize, debug)
-global_observed_motion = realtime_predictor.add_global_translation(passthrough=True)  # Add global translation to the predicted motion
-visualize_continuous_motion(test_input_, skeleton_type='incomplete_h36m', title="Ground Truth Motion")
-# visualize_motion_with_ground_truth(realtime_predictor.predicted_motion, ground_truth, 
-#                                    title="Predicted vs Ground Truth Motion",
-#                                    skeleton_type='incomplete_h36m',)
+for i in range(walking_sample.shape[0] - config.motion.h36m_target_length):
+    test_input_ = walking_sample[i]
+    ground_truth = walking_sample[i:i+config.motion.h36m_target_length]
+    t0 = time.perf_counter()
+    realtime_predictor.predict(test_input_, ground_truth, visualize=False, debug=False)
+    t1 = time.perf_counter()
+    global_observed_motion = realtime_predictor.add_global_translation()  # Add global translation to the predicted motion
+    latency_times.append(t1 - t0)
+
+if prediction_times:
+    avg_prediction_time = sum(prediction_times) / len(prediction_times)
+    print(f"Average prediction time: {avg_prediction_time:.4f} seconds")
+    print(f"Average end-to-end latency time (including data prep): {sum(latency_times) / len(latency_times):.4f} seconds")
 
 

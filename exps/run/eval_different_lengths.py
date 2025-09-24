@@ -85,10 +85,25 @@ hist_lengths = [8, 12, 16, 20, 25, 50]
 dummy_latency_data = [60, 65, 70, 75, 80, 82.7]  # Dummy latency data in ms
 
 percentual_performance = 1/(performance_data / performance_data[-1])
+percentual_latency = np.array(dummy_latency_data) / dummy_latency_data[-1]
+
 print(percentual_performance)
 
 time_horizons = ["80ms", "400ms", "560ms", "1000ms"]
 
+plt.figure(figsize=(10, 6))
+for i in range(4):
+    plt.plot(hist_lengths, performance_data[:, i], marker='o', label=f'{time_horizons[i]}')
+
+plt.xlabel('Retrained historical length (frames)')
+plt.xlim(0, None)
+plt.ylabel('Absolute MPJPE (mm)')
+plt.ylim(0, None)
+plt.title('MPJPE vs Retrained historical length for Different Time Horizons')
+plt.legend(title='Predicted Timesteps into the Future')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
 
 # Exclude hist_length_50 itself if you want only relative bars
 x = np.arange(len(hist_lengths))  # 6 historical lengths
@@ -100,17 +115,21 @@ for i in range(4):
 
 # Add latency line on secondary y-axis
 ax2 = ax.twinx()
-ax2.plot(x + 1.5*bar_width, dummy_latency_data, color='red', marker='o', linestyle='-', label='Latency (ms)')
-ax2.set_ylabel('Latency (ms)', color='red')
-ax2.tick_params(axis='y', labelcolor='red')
+ax2.plot(x + 1.5*bar_width, percentual_latency, color='purple', marker='o', linestyle='-', label='Latency')
+ax2.set_ylabel('Percentual Latency (relative to hist 50)', color='black')
+ax2.tick_params(axis='y', labelcolor='black')
 
-ax.set_ylim(0.9, 1.02)
+# Get handles and labels from both axes
+handles1, labels1 = ax.get_legend_handles_labels()
+handles2, labels2 = ax2.get_legend_handles_labels()
+
+ax.set_ylim(ax2.get_ylim())  # Align y-axis limits
 ax.set_xlabel('Historical Length (frames)')
 ax.set_ylabel('Percentual Performance (relative to hist 50)')
 ax.set_title('Percentual Performance by Historical Length and Time Horizon')
 ax.set_xticks(x + 1.5*bar_width)
 ax.set_xticklabels(hist_lengths)
-ax.legend(title='Predicted Timesteps into the Future', loc='upper left')
+ax.legend(handles1 + handles2, labels1 + labels2,title='Predicted Timesteps into the Future', loc='upper left')
 ax.grid(True, axis='y')
 plt.tight_layout()
 plt.show()
