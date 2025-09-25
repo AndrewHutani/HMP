@@ -13,8 +13,6 @@ from matplotlib import cm
 from matplotlib.animation import FuncAnimation
 from prediction_times import prediction_times
 
-from visualize_motion import visualize_continuous_motion, visualize_motion_with_ground_truth
-
 class RealTimeGlobalPrediction(RealTimePrediction):
     # def add_global_translation(self, root_translation=None):
     #     """
@@ -81,7 +79,7 @@ class RealTimeGlobalPrediction(RealTimePrediction):
         return global_observed_motion
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-84000.pth", help='=encoder path')
+parser.add_argument('--model-pth', type=str, default="ckpt/baseline/hist_length_8.pth", help='=encoder path')
 parser.add_argument('--dyna', nargs='+', type=int, default=[0, 48], help='dynamic layer index')
 args = parser.parse_args()
 
@@ -89,7 +87,7 @@ args = parser.parse_args()
 
 config.motion.h36m_target_length = config.motion.h36m_target_length_eval
 dataset = H36MEval(config, 'test')
-walking_sample, root_sample = dataset.get_full_sequences_for_action("walking")[0]
+walking_samples = dataset.get_full_sequences_for_action("walking")  # List of (sample, root_sample)
 
 # Prepare model
 model = Model(config, args.dyna)
@@ -100,18 +98,21 @@ realtime_predictor = RealTimeGlobalPrediction(model, config, tau=0.5)
 
 latency_times = []
 
-for i in range(walking_sample.shape[0] - config.motion.h36m_target_length):
-    test_input_ = walking_sample[i]
-    ground_truth = walking_sample[i:i+config.motion.h36m_target_length]
-    t0 = time.perf_counter()
-    realtime_predictor.predict(test_input_, ground_truth, visualize=False, debug=False)
-    t1 = time.perf_counter()
-    global_observed_motion = realtime_predictor.add_global_translation()  # Add global translation to the predicted motion
-    latency_times.append(t1 - t0)
+# Run latency measurement for both walking samples
+for sample_idx, (walking_sample, root_sample) in enumerate(walking_samples[:2]):
+    for i in range(walking_sample.shape[0] - config.motion.h36m_target_length):
+        test_input_ = walking_sample[i]
+        ground_truth = walking_sample[i:i+config.motion.h36m_target_length]
+        t0 = time.perf_counter()
+        realtime_predictor.predict(test_input_, ground_truth, visualize=False, debug=False)
+        t1 = time.perf_counter()
+        global_observed_motion = realtime_predictor.add_global_translation()  # Add global translation to the predicted motion
+        latency_times.append(t1 - t0)
 
 if prediction_times:
-    avg_prediction_time = sum(prediction_times) / len(prediction_times)
-    print(f"Average prediction time: {avg_prediction_time:.4f} seconds")
-    print(f"Average end-to-end latency time (including data prep): {sum(latency_times) / len(latency_times):.4f} seconds")
+    avg_prediction_time = sum(prediction_times) / len(prediction_times) * 1000  # convert to ms
+    avg_latency_time = sum(latency_times) / len(latency_times) * 1000  # convert to ms
+    print(f"Average prediction time: {avg_prediction_time:.2f} ms")
+    print(f"Average end-to-end latency time (including data prep): {avg_latency_time:.2f} ms")
 
 
