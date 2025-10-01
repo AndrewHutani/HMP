@@ -11,7 +11,7 @@ from datasets.h36m_eval import H36MEval
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.animation import FuncAnimation
-from prediction_times import prediction_times
+from prediction_times import prediction_times, single_forward_pass_times
 
 class RealTimeGlobalPrediction(RealTimePrediction):
     # def add_global_translation(self, root_translation=None):
@@ -112,7 +112,9 @@ for sample_idx, (walking_sample, root_sample) in enumerate(walking_samples[:2]):
 if prediction_times:
     avg_prediction_time = sum(prediction_times) / len(prediction_times) * 1000  # convert to ms
     avg_latency_time = sum(latency_times) / len(latency_times) * 1000  # convert to ms
+    avg_single_forward_pass_time = sum(single_forward_pass_times) / len(single_forward_pass_times) * 1000  # convert to ms
     print(f"Average prediction time: {avg_prediction_time:.2f} ms")
     print(f"Average end-to-end latency time (including data prep): {avg_latency_time:.2f} ms")
+    print(f"Average single forward pass time: {avg_single_forward_pass_time:.2f} ms")
 
 

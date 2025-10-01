@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 import time
 
-from prediction_times import prediction_times
+from prediction_times import prediction_times, single_forward_pass_times
 
 class RealTimePrediction():
     def __init__(self, model, config, tau):
@@ -289,6 +289,7 @@ class RealTimePrediction():
         
         t0 = time.perf_counter()
         for idx in range(num_prediction_chunks):
+            t0_chunk = time.perf_counter()
             if c == 22: 
                 # This means that the input is already in the correct format
                 motion_input = motion_window.reshape(1, input_length, -1)
@@ -321,6 +322,8 @@ class RealTimePrediction():
 
                 # Slide the window: remove first 'step' frames, append new predictions
                 motion_window = torch.cat([motion_window[chunk_prediction_length:], motion_pred], dim=0)
+            t1_chunk = time.perf_counter()
+            single_forward_pass_times.append(t1_chunk - t0_chunk)
         t1 = time.perf_counter()
         prediction_times.append(t1 - t0)
         # Concatenate all predictions
