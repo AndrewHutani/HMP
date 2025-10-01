@@ -1,14 +1,18 @@
 import re
-from matplotlib.lines import Line2D
 import numpy as np
 import matplotlib.pyplot as plt
 
-actions = ["walking", "eating", "smoking", "discussion", "directions",
-                        "greeting", "phoning", "posing", "purchases", "sitting",
-                        "sittingdown", "takingphoto", "waiting", "walkingdog",
-                        "walkingtogether"]
+actions = [
+    "walking", "eating", "smoking", "discussion", "directions",
+    "greeting", "phoning", "posing", "purchases", "sitting",
+    "sittingdown", "takingphoto", "waiting", "walkingdog",
+    "walkingtogether"
+]
+time_horizons = ["80ms", "400ms", "560ms", "1000ms"]
+figsize = (10, 6)
+dpi = 300
 
-# Parse the data
+# --- PhysMoP Data Loading ---
 def parse_physmop_data(filename, body_part):
     data = []
     found_section = False
@@ -27,16 +31,41 @@ def parse_physmop_data(filename, body_part):
                     break  # End of section
     return np.array(data)
 
-# Parse the data
+def get_physmop_metrics_at_latest_timestep(path, length):
+    upper = parse_physmop_data(path, "upper body")
+    lower = parse_physmop_data(path, "lower body")
+    # Select columns for the 4 time horizons
+    upper = upper[:, [0, 1, 4, 7]]
+    lower = lower[:, [0, 1, 4, 7]]
+    combined = np.mean([upper, lower], axis=0)  # shape: (length, 4)
+    return combined[length-1]  # last timestep for given length
+
+physmop_hist_lengths = [8, 12, 16, 20, 25]
+physmop_files = [
+    "performance_logs/physmop_data_mpjpe_log_hist_length_8.txt",
+    "performance_logs/physmop_data_mpjpe_log_hist_length_12.txt",
+    "performance_logs/physmop_data_mpjpe_log_hist_length_16.txt",
+    "performance_logs/physmop_data_mpjpe_log_hist_length_20.txt",
+    "performance_logs/physmop_data_mpjpe_log_front_to_back.txt"
+]
+physmop_performance_data = np.array([
+    get_physmop_metrics_at_latest_timestep(f, l)
+    for f, l in zip(physmop_files, physmop_hist_lengths)
+])
+physmop_dummy_latency_data = [86.47, 87.64, 97.05, 89.11, 101.64]  # Replace with actual if available
+physmop_percentual_performance = 1/(physmop_performance_data / physmop_performance_data[-1])
+physmop_percentual_latency = np.array(physmop_dummy_latency_data) / physmop_dummy_latency_data[-1]
+print(physmop_percentual_performance)
+
+# --- GCNext Data Loading ---
 def parse_gcn_data(filename, body_part):
-    import re
     action_data = {}
     current_action = None
     with open(filename, "r") as f:
         for line in f:
             m = re.match(r"Averaged MPJPE \((.+)\) for each observation length and each selected timestep: (.+)", line)
             if m and m.group(1).strip().lower() == body_part.lower():
-                current_action = m.group(2).strip().lower()  # <-- action name as key
+                current_action = m.group(2).strip().lower()
                 action_data[current_action] = []
             elif line.startswith("Obs") and current_action:
                 arr = re.findall(r"\[([^\]]+)\]", line)
@@ -44,92 +73,110 @@ def parse_gcn_data(filename, body_part):
                     action_data[current_action].append([float(x) for x in arr[0].split()])
     return action_data
 
-# Aggregate by group
 def group_average(actions, action_data, hist_length):
     group = []
     for act in actions:
         if act in action_data:
-            group.append(np.array(action_data[act][:hist_length]))  # shape: (hist_length, 4)
+            group.append(np.array(action_data[act][:hist_length]))
     if group:
-        return np.mean(np.stack(group), axis=0)  # shape: (hist_length, 4)
+        return np.mean(np.stack(group), axis=0)
     else:
         return None
-    
-def get_eval_metrics_at_latest_timestep(path, length):
+
+def get_gcn_metrics_at_latest_timestep(path, length):
     upper = parse_gcn_data(path, "upper body")
     lower = parse_gcn_data(path, "lower body")
-
     upper = group_average(actions, upper, length)
     lower = group_average(actions, lower, length)
-    combined = np.mean([upper, lower], axis=0)  # shape: (length, 4)
-    return combined[length-1]  
+    combined = np.mean([upper, lower], axis=0)
+    return combined[length-1]
 
-hist_length_50 = get_eval_metrics_at_latest_timestep("performance_logs/gcnext_performance_front_to_back.txt", 50)
-hist_length_25 = get_eval_metrics_at_latest_timestep("performance_logs/gcnext_hist_length_25.txt", 25)
-hist_length_20 = get_eval_metrics_at_latest_timestep("performance_logs/gcnext_hist_length_20.txt", 20)
-hist_length_16 = get_eval_metrics_at_latest_timestep("performance_logs/gcnext_hist_length_16.txt", 16)
-hist_length_12 = get_eval_metrics_at_latest_timestep("performance_logs/gcnext_hist_length_12.txt", 12)
-hist_length_8 = get_eval_metrics_at_latest_timestep("performance_logs/gcnext_hist_length_8.txt", 8)
-
-performance_data = np.array([
-    hist_length_8,
-    hist_length_12,
-    hist_length_16,
-    hist_length_20,
-    hist_length_25,
-    hist_length_50
+gcn_hist_lengths = [8, 12, 16, 20, 25, 50]
+gcn_files = [
+    "performance_logs/gcnext_hist_length_8.txt",
+    "performance_logs/gcnext_hist_length_12.txt",
+    "performance_logs/gcnext_hist_length_16.txt",
+    "performance_logs/gcnext_hist_length_20.txt",
+    "performance_logs/gcnext_hist_length_25.txt",
+    "performance_logs/gcnext_performance_front_to_back.txt"
+]
+gcn_performance_data = np.array([
+    get_gcn_metrics_at_latest_timestep(f, l)
+    for f, l in zip(gcn_files, gcn_hist_lengths)
 ])
-# Historical lengths (x-axis)
-hist_lengths = [8, 12, 16, 20, 25, 50]
+gcn_dummy_latency_data = [71.17, 54.80, 55.18, 68.85, 71.05, 101.31]  # Replace with actual if available
+gcn_percentual_performance = 1/(gcn_performance_data / gcn_performance_data[-1])
+gcn_percentual_latency = np.array(gcn_dummy_latency_data) / gcn_dummy_latency_data[-1]
+print(gcn_percentual_performance)
+# --- Shared axis limits for line plots ---
+all_hist_lengths = sorted(set(physmop_hist_lengths + gcn_hist_lengths))
+x_min = 0
+x_max = max(all_hist_lengths)
+x_bar_max = x_max + 4  # for bar plots
+y_min_abs = min(physmop_performance_data.min(), gcn_performance_data.min())
+y_max_abs = max(physmop_performance_data.max(), gcn_performance_data.max())
+y_min_rel = min(physmop_percentual_performance.min(), gcn_percentual_performance.min())
+y_max_rel = max(physmop_percentual_performance.max(), gcn_percentual_performance.max())
 
-dummy_latency_data = [60, 65, 70, 75, 80, 82.7]  # Dummy latency data in ms
-
-percentual_performance = 1/(performance_data / performance_data[-1])
-percentual_latency = np.array(dummy_latency_data) / dummy_latency_data[-1]
-
-print(percentual_performance)
-
-time_horizons = ["80ms", "400ms", "560ms", "1000ms"]
-
-plt.figure(figsize=(10, 6))
+# --- PhysMoP Line Plot ---
+fig1, ax1 = plt.subplots(figsize=figsize)
 for i in range(4):
-    plt.plot(hist_lengths, performance_data[:, i], marker='o', label=f'{time_horizons[i]}')
+    ax1.plot(physmop_hist_lengths, physmop_performance_data[:, i], marker='o', label=f'{time_horizons[i]}')
+ax1.set_xlabel('Retrained historical length (frames)')
+ax1.set_xlim(x_min, x_max)
+ax1.set_ylabel('Absolute MPJPE (mm)')
+ax1.set_ylim(y_min_abs, y_max_abs)
+ax1.set_title('PhysMoP: MPJPE vs Retrained historical length')
+ax1.legend(title='Predicted Timesteps into the Future')
+ax1.grid(True)
+fig1.tight_layout()
+fig1.savefig('figures/physmop_performance_different_lengths.png', dpi=dpi)
 
-plt.xlabel('Retrained historical length (frames)')
-plt.xlim(0, None)
-plt.ylabel('Absolute MPJPE (mm)')
-plt.ylim(0, None)
-plt.title('MPJPE vs Retrained historical length for Different Time Horizons')
-plt.legend(title='Predicted Timesteps into the Future')
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-# Exclude hist_length_50 itself if you want only relative bars
-x = np.arange(len(hist_lengths))  # 6 historical lengths
-bar_width = 0.1
-
-fig, ax = plt.subplots(figsize=(10, 6))
+# --- PhysMoP Bar Plot ---
+x_physmop = np.array(physmop_hist_lengths)
+bar_width = .5
+fig2, ax2 = plt.subplots(figsize=figsize)
 for i in range(4):
-    ax.bar(x + i*bar_width, percentual_performance[:, i], width=bar_width, label=f'{time_horizons[i]}')
+    ax2.bar(x_physmop + i*bar_width, physmop_percentual_performance[:, i], width=bar_width, label=f'{time_horizons[i]}')
+ax2.set_xticks(x_physmop + 1.5*bar_width)
+ax2.set_xticklabels(physmop_hist_lengths)
+ax2.set_xlim(x_min, x_bar_max)
+ax2.set_ylim(y_min_rel, y_max_rel)
+ax2.set_xlabel('Historical Length (frames)')
+ax2.set_ylabel('Percentual Performance (relative to hist 25)')
+ax2.set_title('PhysMoP: Percentual Performance by Historical Length')
+ax2.legend(title='Predicted Timesteps into the Future', loc='upper left')
+ax2.grid(True)
+fig2.tight_layout()
+fig2.savefig('figures/physmop_bar_performance.png', dpi=dpi)
 
-# Add latency line on secondary y-axis
-ax2 = ax.twinx()
-ax2.plot(x + 1.5*bar_width, percentual_latency, color='purple', marker='o', linestyle='-', label='Latency')
-ax2.set_ylabel('Percentual Latency (relative to hist 50)', color='black')
-ax2.tick_params(axis='y', labelcolor='black')
+# --- GCNext Line Plot ---
+fig3, ax3 = plt.subplots(figsize=figsize)
+for i in range(4):
+    ax3.plot(gcn_hist_lengths, gcn_performance_data[:, i], marker='o', label=f'{time_horizons[i]}')
+ax3.set_xlabel('Retrained historical length (frames)')
+ax3.set_xlim(x_min, x_max)
+ax3.set_ylabel('Absolute MPJPE (mm)')
+ax3.set_ylim(y_min_abs, y_max_abs)
+ax3.set_title('GCNext: MPJPE vs Retrained historical length')
+ax3.legend(title='Predicted Timesteps into the Future')
+ax3.grid(True)
+fig3.tight_layout()
+fig3.savefig('figures/gcnext_performance_different_lengths.png', dpi=dpi)
 
-# Get handles and labels from both axes
-handles1, labels1 = ax.get_legend_handles_labels()
-handles2, labels2 = ax2.get_legend_handles_labels()
-
-ax.set_ylim(ax2.get_ylim())  # Align y-axis limits
-ax.set_xlabel('Historical Length (frames)')
-ax.set_ylabel('Percentual Performance (relative to hist 50)')
-ax.set_title('Percentual Performance by Historical Length and Time Horizon')
-ax.set_xticks(x + 1.5*bar_width)
-ax.set_xticklabels(hist_lengths)
-ax.legend(handles1 + handles2, labels1 + labels2,title='Predicted Timesteps into the Future', loc='upper left')
-ax.grid(True, axis='y')
-plt.tight_layout()
-plt.show()
+# --- GCNext Bar Plot ---
+x_gcn = np.array(gcn_hist_lengths)
+fig4, ax4 = plt.subplots(figsize=figsize)
+for i in range(4):
+    ax4.bar(x_gcn + i*bar_width, gcn_percentual_performance[:, i], width=bar_width, label=f'{time_horizons[i]}')
+ax4.set_xticks(x_gcn + 1.5*bar_width)
+ax4.set_xticklabels(gcn_hist_lengths)
+ax4.set_xlim(x_min, x_bar_max)
+ax4.set_ylim(y_min_rel, y_max_rel)
+ax4.set_xlabel('Historical Length (frames)')
+ax4.set_ylabel('Percentual Performance (relative to hist 50)')
+ax4.set_title('GCNext: Percentual Performance by Historical Length')
+ax4.legend(title='Predicted Timesteps into the Future', loc='upper left')
+ax4.grid(True)
+fig4.tight_layout()
+fig4.savefig('figures/gcnext_bar_performance.png', dpi=dpi)
