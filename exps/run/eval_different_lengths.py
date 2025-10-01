@@ -116,7 +116,7 @@ x_bar_max = x_max + 4  # for bar plots
 y_min_abs = min(physmop_performance_data.min(), gcn_performance_data.min())
 y_max_abs = max(physmop_performance_data.max(), gcn_performance_data.max())
 y_min_rel = min(physmop_percentual_performance.min(), gcn_percentual_performance.min())
-y_max_rel = max(physmop_percentual_performance.max(), gcn_percentual_performance.max())
+y_max_rel = max(physmop_percentual_performance.max(), gcn_percentual_performance.max()) + 0.1
 
 # --- PhysMoP Line Plot ---
 fig1, ax1 = plt.subplots(figsize=figsize)
@@ -138,6 +138,7 @@ bar_width = .5
 fig2, ax2 = plt.subplots(figsize=figsize)
 for i in range(4):
     ax2.bar(x_physmop + i*bar_width, physmop_percentual_performance[:, i], width=bar_width, label=f'{time_horizons[i]}')
+ax2.plot(x_physmop + 1.5*bar_width, physmop_percentual_latency, color='purple', marker='o', linestyle='-', label='Latency')
 ax2.set_xticks(x_physmop + 1.5*bar_width)
 ax2.set_xticklabels(physmop_hist_lengths)
 ax2.set_xlim(x_min, x_bar_max)
@@ -169,6 +170,7 @@ x_gcn = np.array(gcn_hist_lengths)
 fig4, ax4 = plt.subplots(figsize=figsize)
 for i in range(4):
     ax4.bar(x_gcn + i*bar_width, gcn_percentual_performance[:, i], width=bar_width, label=f'{time_horizons[i]}')
+ax4.plot(x_gcn + 1.5*bar_width, gcn_percentual_latency, color='purple', marker='o', linestyle='-', label='Latency')
 ax4.set_xticks(x_gcn + 1.5*bar_width)
 ax4.set_xticklabels(gcn_hist_lengths)
 ax4.set_xlim(x_min, x_bar_max)
