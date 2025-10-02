@@ -12,7 +12,7 @@ from datasets.h36m_eval import H36MEval
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model-pth', type=str, default="ckpt/baseline/hist_length_8.pth", help='=encoder path')
+parser.add_argument('--model-pth', type=str, default="ckpt/baseline/hist_length_25_pred_length_25.pth", help='=encoder path')
 parser.add_argument('--dyna', nargs='+', type=int, default=[0, 48], help='dynamic layer index')
 args = parser.parse_args()
 
@@ -29,7 +29,7 @@ actions = ["walking", "eating",
             "walkingtogether"
             ]
 
-log_filename = "gcnext_hist_length_8.txt"
+log_filename = "gcnext_hist_length_25_pred_length_25.txt"
 with open(log_filename, "w") as log_file:
     for action in actions:
         print(f"Evaluating action: {action}")
