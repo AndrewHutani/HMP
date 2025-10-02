@@ -104,10 +104,12 @@ gcn_performance_data = np.array([
     get_gcn_metrics_at_latest_timestep(f, l)
     for f, l in zip(gcn_files, gcn_hist_lengths)
 ])
+gcn_single_pass_times = [17.77, 19.68, 18.11, 22.61, 25.38, 26.84]  # Example single pass times in seconds
 gcn_dummy_latency_data = [71.17, 54.80, 55.18, 68.85, 71.05, 101.31]  # Replace with actual if available
 gcn_percentual_performance = 1/(gcn_performance_data / gcn_performance_data[-1])
 gcn_percentual_latency = np.array(gcn_dummy_latency_data) / gcn_dummy_latency_data[-1]
-print(gcn_percentual_performance)
+gcn_percentual_single_pass = np.array(gcn_single_pass_times) / gcn_single_pass_times[-1]
+# print(gcn_percentual_performance)
 # --- Shared axis limits for line plots ---
 all_hist_lengths = sorted(set(physmop_hist_lengths + gcn_hist_lengths))
 x_min = 0
@@ -171,6 +173,7 @@ fig4, ax4 = plt.subplots(figsize=figsize)
 for i in range(4):
     ax4.bar(x_gcn + i*bar_width, gcn_percentual_performance[:, i], width=bar_width, label=f'{time_horizons[i]}')
 ax4.plot(x_gcn + 1.5*bar_width, gcn_percentual_latency, color='purple', marker='o', linestyle='-', label='Latency')
+ax4.plot(x_gcn + 1.5*bar_width, gcn_percentual_single_pass, color='orange', marker='o', linestyle='--', label='Single Pass Time')
 ax4.set_xticks(x_gcn + 1.5*bar_width)
 ax4.set_xticklabels(gcn_hist_lengths)
 ax4.set_xlim(x_min, x_bar_max)
