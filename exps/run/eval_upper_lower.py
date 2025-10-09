@@ -44,44 +44,46 @@ def parse_gcn_data(filename, body_part):
                     action_data[current_action].append([float(x) for x in arr[0].split()])
     return action_data
 
-upper_data = parse_physmop_data("physmop_data_mpjpe_log_front_to_back.txt", "upper body")
-lower_data = parse_physmop_data("physmop_data_mpjpe_log_front_to_back.txt", "lower body")
-upper_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt", "upper body")
-lower_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
-upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "upper body")
-lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "lower body")
+# upper_data = parse_physmop_data("physmop_data_mpjpe_log_front_to_back.txt", "upper body")
+# lower_data = parse_physmop_data("physmop_data_mpjpe_log_front_to_back.txt", "lower body")
+# upper_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt", "upper body")
+# lower_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
+# upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "upper body")
+# lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "lower body")
 
-upper_gcn = parse_gcn_data("mpjpe_log.txt", "upper body")
-lower_gcn = parse_gcn_data("mpjpe_log.txt", "lower body")
+upper_gcn = parse_gcn_data("gcnext_hist_length_16_pred_length_13.txt", "upper body")
+lower_gcn = parse_gcn_data("gcnext_hist_length_16_pred_length_13.txt", "lower body")
 
 # Aggregate by group
 def group_average(actions, action_data):
     group = []
     for act in actions:
         if act in action_data:
-            group.append(np.array(action_data[act][:50]))  # shape: (50, 4)
+            group.append(np.array(action_data[act][:16]))  # shape: (50, 4)
     if group:
         return np.mean(np.stack(group), axis=0)  # shape: (50, 4)
     else:
         return None
 
 
-upper_data = upper_data[:, [0, 1, 4, 7]]
-lower_data = lower_data[:, [0, 1, 4, 7]]
-upper_physics = upper_physics[:, [0, 1, 4, 7]]
-lower_physics = lower_physics[:, [0, 1, 4, 7]]
-upper_fusion = upper_fusion[:, [0, 1, 4, 7]]
-lower_fusion = lower_fusion[:, [0, 1, 4, 7]]
+# upper_data = upper_data[:, [0, 1, 4, 7]]
+# lower_data = lower_data[:, [0, 1, 4, 7]]
+# upper_physics = upper_physics[:, [0, 1, 4, 7]]
+# lower_physics = lower_physics[:, [0, 1, 4, 7]]
+# upper_fusion = upper_fusion[:, [0, 1, 4, 7]]
+# lower_fusion = lower_fusion[:, [0, 1, 4, 7]]
 
 upper_gcn = group_average(actions, upper_gcn)
 lower_gcn = group_average(actions, lower_gcn)
+
+gcn = np.concatenate([upper_gcn, lower_gcn], axis=1)  # shape: (50, 8)
 
 # Compute relative MPJPE (percentage of first observation)
 def relative_mpjpe(avg):
     return 100 * avg / avg[0]  # shape: (50, 4)
 
-upper_rel = relative_mpjpe(upper_data)
-lower_rel = relative_mpjpe(lower_data)
+# upper_rel = relative_mpjpe(upper_data)
+# lower_rel = relative_mpjpe(lower_data)
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 
