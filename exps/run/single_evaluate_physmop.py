@@ -15,6 +15,21 @@ from tqdm import tqdm
 
 import torch.nn.functional as F
 
+def front_to_back_frame_indices(positions, joint_idx=8, axis=0):
+    # axis=0 assumes forward is along x; change if needed
+    foot_traj = positions[:, joint_idx, axis]  # shape: (num_frames,)
+    
+    # Find zero-crossings (from positive to negative or vice versa)
+    sign_changes = np.where(np.diff(np.sign(foot_traj)))[0]
+    
+    # Frame indices of transitions
+    transition_frames = sign_changes
+    
+    # Intervals between transitions (in frames)
+    intervals = np.diff(transition_frames)
+    
+    return transition_frames, intervals
+
 
 time_idx = [1, 3, 13, 24] # Corresponds to idx*40 ms in the future
 selected_indices = [t + config.hist_length - 1 for t in time_idx]
@@ -22,13 +37,7 @@ selected_indices = [t + config.hist_length - 1 for t in time_idx]
 ds = "AMASS" 
 if __name__ == "__main__":
     realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
-    # Option 2: Load only walking data
-    # print("\n=== Loading walking data only ===")
-    # walking_dataset = ActionAwareDataset(
-    #     'data/data_processed/h36m_test_50.pkl',
-    #     specific_action='walking'
-    # )
-    data_loader = DataLoader(dataset=BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length, filter_str="treadmill_norm"),
+    data_loader = DataLoader(dataset=BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length, filter_str="treadmill_fast"),
                                 batch_size=1,
                                 shuffle=False,
                                 num_workers=8)
@@ -44,26 +53,51 @@ if __name__ == "__main__":
         # print("Root joint:", batch['q'][:, :25, :3])
         # print(f"Batch shape: {batch['q'].shape}")
         # print(f"Batch file paths: {batch['file_paths']}")
+        num_files = len(batch['file_paths'])
         
         del batch['file_paths']
 
-        # Assume that the model always predicts the same number of frames, at the same frequency
-        normal_batch = {k: v[:, -config.total_length:, ...] if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+    #     # # Assume that the model always predicts the same number of frames, at the same frequency
+    #     for i in range(num_files):
+
+    #         normal_batch = {k: v[:, i*config.total_length:(i+1)*config.total_length, ...] if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+    #         # print("Normal batch shape:", normal_batch['q'].shape)
+    #         model_output, batch_info = realtime_model.predict(normal_batch)
+    #         gt_J, _, _, _ = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
+
+    #         # visualize_continuous_motion(gt_J, title="Ground Truth Motion")
+    #         transition_frames, intervals = front_to_back_frame_indices(gt_J.numpy())
+    #         # visualize_continuous_motion(gt_J.numpy(), title="Ground Truth Motion", skeleton_type="amass", save_gif_path="fast_output_gt.gif")
+    #         # print("Transition frames:", transition_frames)
+    #         # print("Intervals between transitions (in frames):", intervals)
+    #         all_intervals.extend(intervals)
+    #     # break
+    # # Compute the average interval (in frames) across all samples
+    # if all_intervals:
+    #     avg_interval = np.mean(all_intervals)
+    #     print(f"Average interval between transitions (frames): {avg_interval:.2f}")
+    # else:
+    #     print("No transitions found in any sample.")
 
 
-        downsample_rates = np.arange(3, 0.1, -0.2)  # From 3 to 0.1, step -0.2
+        # downsample_rates = np.arange(3, 0.1, -0.2)  # From 3 to 0.1, step -0.2
+        interval_fast = 15.59
+        interval_normal = 17.16
+        downsample_rate = interval_normal / interval_fast  # ≈ 1.10
+        downsample_rates = [1]
         mpjpe_data_results = []
         mpjpe_physics_results = []
         mpjpe_fusion_results = []
 
         for downsample_rate in downsample_rates:
             processed_batch = {}
+            print("downsample_rate:", downsample_rate)
 
             if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
                 # Downsample: select frames at intervals
-                start_index = 0
+                start_index = 11 + 26 - 3
                 # Generate indices for downsampling
-                end_index = int(config.total_length * downsample_rate)
+                end_index = start_index + int(config.total_length * downsample_rate) - 1
                 hist_indices = np.round(np.linspace(start_index, end_index, config.total_length)).astype(int)
                 processed_batch = {k: v[:, hist_indices, ...] if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
             
@@ -86,11 +120,11 @@ if __name__ == "__main__":
             model_output, batch_info = realtime_model.predict(processed_batch)
             gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
 
-            # visualize_continuous_motion(gt_J, title="Ground Truth Motion", skeleton_type="amass")
-            # visualize_motion_with_ground_truth(pred_J_data.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Data)",
-            #                                     skeleton_type="amass", save_gif_path="output_data_{}.gif".format(downsample_rate))
-            # visualize_motion_with_ground_truth(pred_J_physics_gt.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Physics)",
-            #                                     skeleton_type="amass", save_gif_path="output_physics_{}.gif".format(downsample_rate))
+            visualize_continuous_motion(gt_J, title="Ground Truth Motion", skeleton_type="amass", save_path="fast_output_gt.mp4")
+            visualize_motion_with_ground_truth(pred_J_data.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Data)",
+                                                skeleton_type="amass", save_path="output_fast_data.mp4")
+            visualize_motion_with_ground_truth(pred_J_physics_gt.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Physics)",
+                                                skeleton_type="amass", save_path="output_fast_physics.mp4")
             eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
 
 
@@ -103,6 +137,7 @@ if __name__ == "__main__":
         mpjpe_data_all.append(np.array(mpjpe_data_results))  # shape: (num_downsample_rates, 4)
         mpjpe_physics_gt_all.append(np.array(mpjpe_physics_results))  # shape: (num_downsample_rates, 4)
         mpjpe_fusion_all.append(np.array(mpjpe_fusion_results))  # shape: (num_downsample_rates, 4)
+        break
 
     mpjpe_data_all = np.array(mpjpe_data_all)  # shape: (num_samples, num_downsample_rates, 4)
     mpjpe_data_all = np.mean(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates, 4)
@@ -111,49 +146,53 @@ if __name__ == "__main__":
     mpjpe_fusion_all = np.array(mpjpe_fusion_all)  # shape: (num_samples, num_downsample_rates, 4)
     mpjpe_fusion_all = np.mean(mpjpe_fusion_all, axis=0)  # shape: (num_downsample_rates, 4)
 
-    mjpe_gcnext_all = np.loadtxt("mpjpe_data_all.txt", delimiter=",")
+    print("MPJPE Data Branch:\n", mpjpe_data_all)
+    print("MPJPE Physics Branch:\n", mpjpe_physics_gt_all)
+    print("MPJPE Fusion Branch:\n", mpjpe_fusion_all)
 
-    branch_results = {
-        "data": mpjpe_data_all,
-        "physics_gt": mpjpe_physics_gt_all,
-        "fusion": mpjpe_fusion_all,
-        "gcnext": mjpe_gcnext_all
-    }
-    branch_titles = {
-        "data": "MPJPE for the data branch vs Downsample Rate",
-        "physics_gt": "MPJPE for the physics branch vs Downsample Rate",
-        "fusion": "MPJPE for the fusion branch vs Downsample Rate",
-        "gcnext": "MPJPE for the GCNext model vs Downsample Rate"
-    }
-    branch_filenames = {
-        "data": "mpjpe_vs_downsample_rate_data.png",
-        "physics_gt": "mpjpe_vs_downsample_rate_physics.png",
-        "fusion": "mpjpe_vs_downsample_rate_fusion.png",
-        "gcnext": "mpjpe_vs_downsample_rate_gcnext.png"
-    }
+    # mjpe_gcnext_all = np.loadtxt("mpjpe_data_fast.txt", delimiter=",")
 
-    all_arrays = [
-    mpjpe_data_all,
-    mpjpe_physics_gt_all,
-    mpjpe_fusion_all,
-    mjpe_gcnext_all
-    ]
+    # branch_results = {
+    #     "data": mpjpe_data_all,
+    #     "physics_gt": mpjpe_physics_gt_all,
+    #     "fusion": mpjpe_fusion_all,
+    #     "gcnext": mjpe_gcnext_all
+    # }
+    # branch_titles = {
+    #     "data": "MPJPE for the data branch vs Downsample Rate",
+    #     "physics_gt": "MPJPE for the physics branch vs Downsample Rate",
+    #     "fusion": "MPJPE for the fusion branch vs Downsample Rate",
+    #     "gcnext": "MPJPE for the GCNext model vs Downsample Rate"
+    # }
+    # branch_filenames = {
+    #     "data": "mpjpe_vs_downsample_rate_data.png",
+    #     "physics_gt": "mpjpe_vs_downsample_rate_physics.png",
+    #     "fusion": "mpjpe_vs_downsample_rate_fusion.png",
+    #     "gcnext": "mpjpe_vs_downsample_rate_gcnext.png"
+    # }
 
-    all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
-    y_min = np.min(all_data[all_data > 0])  # Avoid zero for log scale
-    y_max = np.percentile(all_data, 100)
-    y_limits = (y_min, y_max)
+    # all_arrays = [
+    # mpjpe_data_all,
+    # mpjpe_physics_gt_all,
+    # mpjpe_fusion_all,
+    # mjpe_gcnext_all
+    # ]
 
-    for branch, results in branch_results.items():
-        plt.figure()
-        for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-            plt.plot(downsample_rates, results[:, i], marker='o', label=label)
-        plt.xlabel('Downsample Rate')
-        plt.ylabel('Mean MPJPE')
-        plt.title(branch_titles[branch])
-        plt.gca().invert_xaxis()
-        plt.grid(True)
-        plt.legend(title='Timesteps into the future')
-        plt.ylim(y_limits)
-        plt.savefig(branch_filenames[branch])
-        plt.close()
+    # all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
+    # y_min = np.min(all_data[all_data > 0])  # Avoid zero for log scale
+    # y_max = np.percentile(all_data, 100)
+    # y_limits = (y_min, y_max)
+
+    # for branch, results in branch_results.items():
+    #     plt.figure()
+    #     for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
+    #         plt.plot(downsample_rates, results[:, i], marker='o', label=label)
+    #     plt.xlabel('Downsample Rate')
+    #     plt.ylabel('Mean MPJPE')
+    #     plt.title(branch_titles[branch])
+    #     plt.gca().invert_xaxis()
+    #     plt.grid(True)
+    #     plt.legend(title='Timesteps into the future')
+    #     plt.ylim(y_limits)
+    #     plt.savefig(branch_filenames[branch])
+    #     plt.close()

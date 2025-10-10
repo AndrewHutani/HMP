@@ -1,0 +1,36 @@
+[] : Links achter - Links voor - Verschil
+
+Faster: 12 - 29 - 17
+Normal: 6 - 26 - 20
+
+Average interval between transitions (frames): 15.59 Fast
+Average interval between transitions (frames): 17.16 Normal
+Average interval between transitions (frames): 20.91 Slow
+
+
+This is the MPJPE for the fast treadmill: 11?
+MPJPE Data Branch: [[ 1.60579056 2.4438946 16.94309937 30.78297804]] 
+MPJPE Physics Branch: [[8.48478411e-02 9.44617920e-01 3.73826735e+01 1.03466606e+02]] 
+MPJPE Fusion Branch: [[ 0.08617739 0.98929592 23.7275037 36.0881034 ]] 
+
+This is the data for the normal treadmill with downsampling : 11+ 14
+MPJPE Data Branch: [[10.78848193 16.25288042 85.08438563 90.78618735]] 
+MPJPE Physics Branch: [[ 9.74060462 9.53027415 32.22213261 107.18719244]] 
+MPJPE Fusion Branch: [[ 9.74168523 9.69846001 99.35670597 133.68560785]]
+
+
+Treadmill Slow
+MPJPE Data Branch:
+ [[ 0.6036573   1.54409341 13.44922471 26.34510221]]
+MPJPE Physics Branch:
+ [[5.66492708e-02 5.84889847e-01 2.41023810e+01 8.16093200e+01]]
+MPJPE Fusion Branch:
+ [[ 0.05669601  0.58849916 19.85672112 35.07842648]]
+
+Normal treadmill with interpolating
+MPJPE Data Branch:
+ [[ 0.4658417   1.77813219 18.33996621 31.82177926]]
+MPJPE Physics Branch:
+ [[ 0.13644426  1.03799223 24.26495507 70.56791501]]
+MPJPE Fusion Branch:
+ [[ 0.13634223  1.03946161 21.919298   39.42248485]]

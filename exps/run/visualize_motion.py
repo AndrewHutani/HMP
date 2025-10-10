@@ -9,8 +9,9 @@ import torch
 from utils.misc import expmap2rotmat_torch, find_indices_256, find_indices_srnn, rotmat2xyz_torch
 import matplotlib.animation as animation
 from matplotlib.animation import PillowWriter
+from matplotlib.animation import FFMpegWriter
 
-def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visualization", skeleton_type = None,save_gif_path = None):
+def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visualization", skeleton_type = None, save_path = None):
     """
     Save a continuous motion sequence in 3D.
 
@@ -72,8 +73,8 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
 
     ani = animation.FuncAnimation(fig, update, frames=motion_sequence.shape[0], interval=100)
 
-    if save_gif_path:
-        ani.save(save_gif_path, writer=PillowWriter(fps=10))
+    if save_path:
+        ani.save(save_path, writer=FFMpegWriter(fps=10))
         plt.close()
     else:
         # while True:
@@ -113,7 +114,7 @@ def preprocess(filename):
 def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, 
                                        title="Predicted vs Ground Truth Motion",
                                        skeleton_type=None,
-                                       save_gif_path=None):
+                                       save_path=None):
     """
     Visualize the predicted motion and ground truth in 3D for specific time steps, with skeleton connections.
 
@@ -191,8 +192,8 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
 
     ani = animation.FuncAnimation(fig, update, frames=predicted_positions.shape[0], interval=100)
 
-    if save_gif_path:
-        ani.save(save_gif_path, writer=PillowWriter(fps=10))
+    if save_path:
+        ani.save(save_path, writer=FFMpegWriter(fps=10))
         plt.close()
     else:
         while True:
