@@ -23,7 +23,7 @@ actions = [
     "sittingdown", "takingphoto", "waiting", "walkingdog",
     "walkingtogether"
 ]
-time_idx = [1, 3, 7, 9, 13, 17, 21, 24] # Corresponds to idx*40 ms in the future
+time_idx = [1, 3, 7, 9, 13, 17, 21, 24] # Corresponds to (idx+1)*40 ms in the future
 selected_indices = [t + config.hist_length - 1 for t in time_idx]
 
 ds = "AMASS" 

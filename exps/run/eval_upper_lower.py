@@ -89,6 +89,12 @@ def plot_and_save(upper_data, lower_data, model_name, branch, x_vals, colors, y_
 
 # Parse the data
 def parse_physmop_data(filename, body_part):
+    '''
+    Note that there are 8 timehorizons logged per observation length.
+    time_idx = [1, 3, 7, 9, 13, 17, 21, 24] # Corresponds to (idx+1)*40 ms in the future, i.e.,
+    time horizons are: 80ms, 160ms, 320ms, 400ms, 560ms, 720ms, 880ms, 1000ms
+    we want: 80ms, 400ms, 560ms, 1000ms -> indices 0, 3, 4, 7
+    '''
     data = []
     found_section = False
     header = f"Averaged MPJPE ({body_part}) for each observation length and each selected timestep:"
@@ -152,12 +158,12 @@ def group_average(actions, action_data):
 upper_gcn = group_average(actions, upper_gcn)
 lower_gcn = group_average(actions, lower_gcn)
 
-upper_data = upper_data[:, [0, 1, 4, 7]]
-lower_data = lower_data[:, [0, 1, 4, 7]]
-upper_physics = upper_physics[:, [0, 1, 4, 7]]
-lower_physics = lower_physics[:, [0, 1, 4, 7]]
-upper_fusion = upper_fusion[:, [0, 1, 4, 7]]
-lower_fusion = lower_fusion[:, [0, 1, 4, 7]]
+upper_data = upper_data[:, [0, 3, 4, 7]]
+lower_data = lower_data[:, [0, 3, 4, 7]]
+upper_physics = upper_physics[:, [0, 3, 4, 7]]
+lower_physics = lower_physics[:, [0, 3, 4, 7]]
+upper_fusion = upper_fusion[:, [0, 3, 4, 7]]
+lower_fusion = lower_fusion[:, [0, 3, 4, 7]]
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 x_vals = np.arange(1, len(upper_data) + 1)
