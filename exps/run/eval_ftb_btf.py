@@ -41,6 +41,20 @@ front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # s
 back_to_front = back_to_front[:, [0, 3, 4, 7]]  # shape: (50, 4)
 front_to_back = front_to_back[:, [0, 3, 4, 7]]  # shape: (50, 4)
 
+# Calculate Mean Absolute Difference (MAD) between ftb and btf for each prediction horizon
+mad = np.mean(np.abs(front_to_back - back_to_front), axis=0)
+print("Mean Absolute Difference (MAD) between Front-to-Back and Back-to-Front for each prediction horizon:")
+for i, horizon in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
+    print(f"{horizon}: {mad[i]:.2f} mm")
+
+# Mean MPJPE per horizon (across frames)
+mean_back = np.mean(back_to_front, axis=0)   # shape: (4,)
+mean_front = np.mean(front_to_back, axis=0)  # shape: (4,)
+
+# Percentage difference (Tim J. Cole, 2000)
+percentage_diff = np.abs(mean_back - mean_front) / ((mean_back + mean_front) / 2) * 100
+print("Percentage difference between back-to-front and front-to-back (%):", percentage_diff)
+
 # Aggregate by group
 def group_average(actions, action_data):
     group = []
