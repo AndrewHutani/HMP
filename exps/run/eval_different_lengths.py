@@ -35,8 +35,8 @@ def get_physmop_metrics_at_latest_timestep(path, length):
     upper = parse_physmop_data(path, "upper body")
     lower = parse_physmop_data(path, "lower body")
     # Select columns for the 4 time horizons
-    upper = upper[:, [0, 1, 4, 7]]
-    lower = lower[:, [0, 1, 4, 7]]
+    upper = upper[:, [1, 4, 3, 7]]
+    lower = lower[:, [1, 4, 3, 7]]
     combined = np.mean([upper, lower], axis=0)  # shape: (length, 4)
     return combined[length-1]  # last timestep for given length
 
