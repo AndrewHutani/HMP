@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 # Define your groups
 static_actions = ["Sitting", "SittingDown", "Posing"]
-combination_actions =["Discussion", "Directions", "Phoning", "Eating", "Waiting"]
+combination_actions =["Discussion", "Directions", "Phoning", "Eating", "Waiting", "Smoking", "Purchases", "TakingPhoto"]
 dynamic_actions = ["Walking", "WalkingTogether", "WalkingDog", "Greeting"]
 
 all_actions = static_actions + combination_actions + dynamic_actions
@@ -29,17 +29,79 @@ def parse_action_data(filename, body_part):
                     break  # End of section
     return np.array(data)
 
-back_to_front_upper = parse_action_data("performance_logs/physmop_data_mpjpe_log.txt", "upper body")
-back_to_front_lower = parse_action_data("performance_logs/physmop_data_mpjpe_log.txt", "lower body")
-front_to_back_upper = parse_action_data("performance_logs/physmop_data_mpjpe_log_front_to_back.txt", "upper body")
-front_to_back_lower = parse_action_data("performance_logs/physmop_data_mpjpe_log_front_to_back.txt", "lower body")
-# Combine upper and lower body data for back-to-front and front-to-back
-back_to_front = np.mean([back_to_front_upper, back_to_front_lower], axis=0)  # shape: (50, 8)
-front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 8)
+def parse_gcn_data_average(filename):
+    import re
+    import numpy as np
+    all_actions = []
+    current_action = None
+    with open(filename, "r") as f:
+        for line in f:
+            m = re.match(r"Averaged MPJPE for each observation length and each selected timestep: (.+)", line)
+            if m:
+                current_action = []
+                all_actions.append(current_action)
+            elif line.startswith("Obs") and current_action is not None:
+                arr = re.findall(r"\[([^\]]+)\]", line)
+                if arr:
+                    current_action.append([float(x) for x in arr[0].split()])
+    # Filter out any incomplete actions
+    actions_np = [np.array(a) for a in all_actions if len(a) == 50]
+    if not actions_np:
+        raise ValueError("No complete actions found in file.")
+    stacked = np.stack(actions_np)  # shape: (num_actions, 50, 4)
+    print("Number of actions parsed:", stacked.shape[0])
+    avg = np.mean(stacked, axis=0)  # shape: (50, 4)
+    return avg
 
-# Select the relevant columns for the 4 timesteps
-back_to_front = back_to_front[:, [0, 3, 4, 7]]  # shape: (50, 4)
-front_to_back = front_to_back[:, [0, 3, 4, 7]]  # shape: (50, 4)
+# Parse the data
+def parse_gcn_data(filename, body_part):
+    import re
+    action_data = {}
+    current_action = None
+    with open(filename, "r") as f:
+        for line in f:
+            m = re.match(r"Averaged MPJPE \((.+)\) for each observation length and each selected timestep: (.+)", line)
+            if m and body_part.lower() in m.group(1).strip().lower():
+                current_action = m.group(2).strip().lower()
+                action_data[current_action] = []
+            elif line.startswith("Obs") and current_action:
+                arr = re.findall(r"\[([^\]]+)\]", line)
+                if arr:
+                    action_data[current_action].append([float(x) for x in arr[0].split()])
+            elif line.strip() == "" and current_action:
+                current_action = None
+    return action_data
+
+# Aggregate by group
+def group_average(actions, action_data):
+    group = []
+    for act in actions:
+        key = act.lower()
+        if key in action_data:
+            group.append(np.array(action_data[key][:50]))  # shape: (50, 4)
+    if group:
+        return np.mean(np.stack(group), axis=0)  # shape: (50, 4)
+    else:
+        return None
+
+back_to_front = parse_gcn_data_average("performance_logs/gcnext_performance_back_to_front.txt")
+# back_to_front_lower = parse_gcn_data_average("performance_logs/gcnext_performance_back_to_front.txt")
+front_to_back_upper = parse_gcn_data("performance_logs/gcnext_performance_front_to_back.txt", "upper")
+front_to_back_lower = parse_gcn_data("performance_logs/gcnext_performance_front_to_back.txt", "lower")
+print(front_to_back_upper.keys())
+
+front_to_back_upper = group_average(all_actions, front_to_back_upper)
+front_to_back_lower = group_average(all_actions, front_to_back_lower)
+front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 4)
+# Combine upper and lower body data for back-to-front and front-to-back
+# back_to_front = np.mean([back_to_front_upper, back_to_front_lower], axis=0)  # shape: (50, 8)
+# front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 8)
+
+# # Select the relevant columns for the 4 timesteps
+# back_to_front = back_to_front[:, [0, 3, 4, 7]]  # shape: (50, 4)
+# front_to_back = front_to_back[:, [0, 3, 4, 7]]  # shape: (50, 4)
+print("Back-to-front shape:", back_to_front.shape)
+print("Front-to-back shape:", front_to_back.shape)
 
 # Calculate Mean Absolute Difference (MAD) between ftb and btf for each prediction horizon
 mad = np.mean(np.abs(front_to_back - back_to_front), axis=0)
@@ -84,7 +146,7 @@ for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
     plt.plot(front_to_back[:, i], label=f"{label} Front-to-back", color=colors[i], linestyle='--')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Absolute MPJPE (mm)")
-plt.title("Absolute MPJPE vs. Observed Frames\n Data branch of PhysMoP")
+plt.title("Absolute MPJPE vs. Observed Frames\n GCNext model")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
@@ -119,7 +181,7 @@ plt.legend(
     labels=all_labels,
     loc='best',
     # bbox_to_anchor=(1.6, 1.0),
-    title='Predicted Timesteps into the Future'
+    title='Prediction Horizon'
 )
 plt.grid(True)
 plt.tight_layout()
