@@ -29,17 +29,17 @@ def parse_action_data(filename, body_part):
                     break  # End of section
     return np.array(data)
 
-back_to_front_upper = parse_action_data("physmop_physics_mpjpe_log.txt", "upper body")
-back_to_front_lower = parse_action_data("physmop_physics_mpjpe_log.txt", "lower body")
-front_to_back_upper = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "upper body")
-front_to_back_lower = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
+back_to_front_upper = parse_action_data("performance_logs/physmop_data_mpjpe_log.txt", "upper body")
+back_to_front_lower = parse_action_data("performance_logs/physmop_data_mpjpe_log.txt", "lower body")
+front_to_back_upper = parse_action_data("performance_logs/physmop_data_mpjpe_log_front_to_back.txt", "upper body")
+front_to_back_lower = parse_action_data("performance_logs/physmop_data_mpjpe_log_front_to_back.txt", "lower body")
 # Combine upper and lower body data for back-to-front and front-to-back
 back_to_front = np.mean([back_to_front_upper, back_to_front_lower], axis=0)  # shape: (50, 8)
 front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 8)
 
 # Select the relevant columns for the 4 timesteps
-back_to_front = back_to_front[:, [0, 1, 4, 7]]  # shape: (50, 4)
-front_to_back = front_to_back[:, [0, 1, 4, 7]]  # shape: (50, 4)
+back_to_front = back_to_front[:, [0, 3, 4, 7]]  # shape: (50, 4)
+front_to_back = front_to_back[:, [0, 3, 4, 7]]  # shape: (50, 4)
 
 # Aggregate by group
 def group_average(actions, action_data):
@@ -70,7 +70,7 @@ for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
     plt.plot(front_to_back[:, i], label=f"{label} Front-to-back", color=colors[i], linestyle='--')
 plt.xlabel("Number of Observed Frames")
 plt.ylabel("Absolute MPJPE (mm)")
-plt.title("Absolute MPJPE vs. Observed Frames\n Physics branch of PhysMoP")
+plt.title("Absolute MPJPE vs. Observed Frames\n Data branch of PhysMoP")
 
 # First legend
 first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
