@@ -14,10 +14,75 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 import torch.nn.functional as F
-
-
-
 import os
+import math
+
+def _hann_lowpass_1d(x, cutoff_frac, k_min=5):
+    """
+    x: [B, T, F...] (time=dim1). cutoff_frac in (0,1], relative to Nyquist (1.0 == Nyquist).
+    Simple Hann-windowed low-pass via depthwise 1D conv along time.
+    """
+    B, T = x.shape[0], x.shape[1]
+    if T < 3:
+        return x
+
+    # Kernel length ~ 8/cutoff; keep odd
+    k = max(k_min, int(math.ceil(8 / max(1e-6, cutoff_frac)))) | 1
+    t = torch.arange(k, device=x.device, dtype=x.dtype)
+    n = t - (k - 1) / 2
+
+    # cutoff_frac is relative to Nyquist=0.5 cycles/sample -> normalized cutoff fc (cycles/sample)
+    fc = 0.5 * cutoff_frac  # so cutoff_frac=1.0 means fc=0.5 (Nyquist)
+    # sinc kernel (torch.sinc uses π-normalization: sinc(x)=sin(πx)/(πx))
+    h = torch.sinc((2 * fc) * n)
+    # Hann window
+    w = 0.5 - 0.5 * torch.cos(2 * math.pi * (t / (k - 1)))
+    h = (h * w).to(x.dtype)
+    h = h / h.sum()  # DC gain = 1
+
+    pad = k // 2
+    x_flat = x.reshape(B, T, -1).transpose(1, 2)  # [B, F, T]
+    h = h.view(1, 1, k).to(x.device, x.dtype)
+    y = F.conv1d(F.pad(x_flat, (pad, pad), mode='replicate'),
+                 h.expand(x_flat.shape[1], 1, k),
+                 groups=x_flat.shape[1])
+    return y.transpose(1, 2).reshape_as(x)
+
+def resample_with_history_boundary_anchored(x_hist, N, alpha, antialias = True):
+    """
+    Resample a sequence x_hist of length L to a new length N, keeping the last frame fixed.
+    The resampling is anchored at the history boundary (last frame of x_hist).
+    Args:
+        x_hist: Input sequence of shape (L, D)
+        N: Desired output length
+        alpha: Resampling factor (N / L)
+        antialias: Whether to apply anti-aliasing filter when downsampling
+    """
+    B, T_h = x_hist.shape[0], x_hist.shape[1]
+
+    # Anti-alias if downsampling
+    if antialias and alpha > 1.0 and T_h > 8:
+        # cutoff relative to Nyquist: 1/alpha (<=1). Use a small safety margin.
+        cutoff_frac = min(1.0 / alpha, 0.9)
+        x_hist = _hann_lowpass_1d(x_hist, cutoff_frac)
+    
+    # Build target times anchored at the last frame
+    t_last = T_h - 1
+    t = torch.arange(N, device=x_hist.device, dtype=x_hist.dtype)
+    t_target = t_last - t * float(alpha)                # newest->oldest
+    # print("Resampling with alpha =", alpha)
+    # print("t_target before clamp:", t_target)
+    t_target = torch.clamp(t_target, 0, T_h - 1)
+
+    t0 = torch.floor(t_target).long()
+    t1 = torch.clamp(t0 + 1, max=T_h - 1)
+    w = (t_target - t0.to(t_target.dtype)).view(1, N, *([1] * (x_hist.dim() - 2)))
+
+    x0 = x_hist[:, t0, ...]
+    x1 = x_hist[:, t1, ...]
+    y  = (1 - w) * x0 + w * x1
+    # reverse to chronological order (oldest -> newest)
+    return torch.flip(y, dims=[1])
 
 
 time_idx = [2, 10, 14, 25]
@@ -90,36 +155,29 @@ if __name__ == "__main__":
 
                 if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
                     # Downsample only the input part, then take the next output_len frames at original rate
-                    # Compute how many source frames we need for the input
-                    src_input_span = int(np.round(input_len * downsample_rate))
-
-                    # choose a start index in the original batch time axis (here 0 -> start of sequence)
-                    start_index = 0
-                    input_src_end = start_index + src_input_span - 1
-
-                    # build input indices (evenly spaced over the source span)
-                    input_indices = np.round(np.linspace(start_index, input_src_end, input_len)).astype(int)
-
                     for k, v in batch.items():
                         if not isinstance(v, torch.Tensor):
                             processed_batch[k] = v
                             continue
 
-                        # time axis is axis=1: [batch, time, ...]
-                        max_t = v.shape[1] - 1
-                        input_indices_clipped = np.clip(input_indices, 0, max_t)
+                        # 1) Take the original input history support on the native grid
+                        src_input = v[:, :int(round(input_len * downsample_rate)), ...]  # [B, input_len, ...] chronological
 
-                        # last input index (in source)
-                        last_input_idx = int(input_indices_clipped[-1])
-                        # output indices are the next output_len frames at the original sampling rate
-                        output_indices = np.arange(last_input_idx + 1, last_input_idx + 1 + output_len)
-                        output_indices = np.clip(output_indices, 0, max_t)
+                        # 2) Resample the input history uniformly at factor alpha, anchored at the boundary
+                        #    (no jitter, no duplicates; with anti-alias for alpha>1)
+                        res_in = resample_with_history_boundary_anchored(src_input, input_len, float(downsample_rate), antialias=True)
 
-                        # gather and concatenate along time axis
-                        # use torch.index_select for tensors
-                        in_sel = torch.index_select(v, 1, torch.from_numpy(input_indices_clipped).to(v.device))
+                        # 3) Keep output at original sampling rate, aligned to the original boundary
+                        # original_last_input_idx = int(round(input_len * downsample_rate)) - 1
+                       
+                        output_indices = np.arange(int(round(input_len * downsample_rate)),
+                                                int(round(input_len * downsample_rate)) + output_len)
+                        # print("Output indices:", output_indices)
+                        output_indices = np.clip(output_indices, 0, v.shape[1] - 1)
                         out_sel = torch.index_select(v, 1, torch.from_numpy(output_indices).to(v.device))
-                        processed_batch[k] = torch.cat([in_sel, out_sel], dim=1)
+
+                        # 4) Concatenate input (resampled) + output (original grid)
+                        processed_batch[k] = torch.cat([res_in, out_sel], dim=1)
 
                 else:
                     # Upsample input: interpolate the input portion, then take following output frames
@@ -190,7 +248,7 @@ if __name__ == "__main__":
         np.savetxt("mpjpe_physmop_physics.txt", mpjpe_physics_gt_all, delimiter=",")
         np.savetxt("mpjpe_physmop_fusion.txt", mpjpe_fusion_all, delimiter=",")
 
-    mjpe_gcnext_all = np.loadtxt("mpjpe_data_all.txt", delimiter=",")
+    mjpe_gcnext_all = np.loadtxt("mpjpe_gcnext.txt", delimiter=",")
 
     branch_results = {
         "data": mpjpe_data_all,
