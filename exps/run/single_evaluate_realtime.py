@@ -14,31 +14,74 @@ from matplotlib.animation import FuncAnimation
 from prediction_times import prediction_times
 from visualize_motion import visualize_continuous_motion
 
-import torch.nn.functional as F
+from tqdm import tqdm
 
-def resample_sequence(sequence, downsample_rate, total_length, start_idx = 0):
+import torch.nn.functional as F
+import math
+
+def hann_lowpass_1d(x, cutoff_frac, k_min=5):
+    """
+    x: [T, J, 3] (time=dim0). cutoff_frac in (0,1], relative to Nyquist (1.0 == Nyquist).
+    Simple Hann-windowed low-pass via depthwise 1D conv along time.
+    """
+    T = x.shape[0]
+    if T < 3:
+        return x
+    k = max(k_min, int(math.ceil(8 / max(1e-6, cutoff_frac)))) | 1
+    t = torch.arange(k, device=x.device, dtype=x.dtype)
+    n = t - (k - 1) / 2
+    fc = 0.5 * cutoff_frac
+    h = torch.sinc((2 * fc) * n)
+    w = 0.5 - 0.5 * torch.cos(2 * math.pi * (t / (k - 1)))
+    h = (h * w).to(x.dtype)
+    h = h / h.sum()
+    pad = k // 2
+    # [T, J, 3] -> [J*3, T]
+    x_flat = x.reshape(T, -1).transpose(0, 1)
+    h = h.view(1, 1, k).to(x.device, x.dtype)
+    y = F.conv1d(F.pad(x_flat.unsqueeze(0), (pad, pad), mode='replicate'),
+                 h.expand(x_flat.shape[0], 1, k),
+                 groups=x_flat.shape[0])
+    y = y.squeeze(0).transpose(0, 1).reshape(T, x.shape[1], x.shape[2])
+    return y
+
+def resample_sequence(sequence, downsample_rate, total_length, start_idx = 0, antialias=True):
     """
     Resample a sequence (downsample or upsample) to match the logic in single_evaluate_physmop.py.
-
     Args:
         sequence: torch.Tensor, shape [num_frames, num_joints, 3]
         downsample_rate: float
         total_length: int, number of frames to output
-
     Returns:
         torch.Tensor, shape [total_length, num_joints, 3]
     """
+    device = sequence.device
+    dtype = sequence.dtype
     if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
-        # Downsample: select frames at intervals
-        start_index = start_idx
-        end_index = int(total_length * downsample_rate) + start_idx
-        indices = np.round(np.linspace(start_index, end_index, total_length)).astype(int)
-        indices = np.clip(indices, 0, sequence.shape[0] - 1)
-        return sequence[indices]
+        # Downsample: interpolate with anti-aliasing
+        src_span = int(round(total_length * downsample_rate))
+        src_end = min(start_idx + src_span, sequence.shape[0])
+        src_seq = sequence[start_idx:src_end]
+        # Anti-aliasing
+        if antialias and downsample_rate > 1.0 and src_seq.shape[0] > 8:
+            cutoff_frac = min(1.0 / downsample_rate, 0.9)
+            src_seq = hann_lowpass_1d(src_seq, cutoff_frac)
+        # Interpolate
+        t_src = torch.arange(src_seq.shape[0], device=device, dtype=dtype)
+        t_target = torch.linspace(src_seq.shape[0] - 1, 0, total_length, device=device, dtype=dtype)
+        t_target = torch.clamp(t_target, 0, src_seq.shape[0] - 1)
+        t0 = torch.floor(t_target).long()
+        t1 = torch.clamp(t0 + 1, max=src_seq.shape[0] - 1)
+        w = (t_target - t0.to(dtype)).view(-1, 1, 1)
+        x0 = src_seq[t0]
+        x1 = src_seq[t1]
+        y = (1 - w) * x0 + w * x1
+        # Reverse to chronological order
+        y = torch.flip(y, dims=[0])
+        return y
     else:
         # Upsample: interpolate to more frames
         upsample_factor = 1.0 / downsample_rate
-        # Slice the sequence at start_idx before upsampling
         seq_slice = sequence[start_idx : start_idx + total_length]
         orig_time_steps = seq_slice.shape[0]
         new_time_steps = int(np.round(orig_time_steps * upsample_factor))
@@ -148,6 +191,8 @@ for walking_sample, _ in dataset.get_full_sequences_for_action(action):
     latency_times = []
     downsample_rates = np.arange(3, 0.1, -0.2)  # From 3 to 0.1, step -0.2
 
+    input_len = config.motion.h36m_input_length
+    output_len = config.motion.h36m_target_length_eval
 
     for downsample_rate in downsample_rates:
         print(f"Downsample rate: {downsample_rate:.2f}")
@@ -165,21 +210,34 @@ for walking_sample, _ in dataset.get_full_sequences_for_action(action):
 
         stride = 1
         mpjpe_data_per_downsample_rate = []
-        for start_idx in range(0, max_start_idx + 1, stride):
-            walking_sample_resampled = resample_sequence(walking_sample, downsample_rate, total_length, start_idx=start_idx)
-            test_input_ = walking_sample_resampled[:config.motion.h36m_input_length]
-            ground_truth = walking_sample_resampled[config.motion.h36m_input_length:]
+
+        for start_idx in tqdm(range(0, max_start_idx + 1, stride), desc="Processing"):
+            # Resample input and output
+            src_span = int(round(input_len * downsample_rate))
+            src_end = min(start_idx + src_span, walking_sample.shape[0])
+            sequence_resampled = resample_sequence(
+                                walking_sample,
+                                downsample_rate,
+                                total_length,
+                                start_idx=start_idx,
+                                antialias=True
+                            )
+            test_input_ = sequence_resampled[:config.motion.h36m_input_length]
+            ground_truth = sequence_resampled[config.motion.h36m_input_length:]
             realtime_predictor.batch_predict(test_input_, ground_truth, visualize=False, debug=False)
             mpjpe_data = realtime_predictor.evaluate() # Shape (4, )
-            mpjpe_data_per_downsample_rate.append(mpjpe_data)
-            # visualize_continuous_motion(walking_sample_resampled, skeleton_type='h36m',
+            # visualize_continuous_motion(sequence_resampled, skeleton_type='h36m',
             #                             save_gif_path='output_{}.gif'.format(downsample_rate))
+
+
+            mpjpe_data_per_downsample_rate.append(mpjpe_data)
+            # break
         mpjpe_data_per_sample.append(np.mean(np.array(mpjpe_data_per_downsample_rate), axis=0))
     mpjpe_data_all.append(np.array(mpjpe_data_per_sample))
 print(np.array(mpjpe_data_all).shape)
 mpjpe_data_all = np.mean(np.array(mpjpe_data_all), axis=0)  # shape: (num_downsample_rates, 4)
 
-np.savetxt("mpjpe_data_all.txt", mpjpe_data_all, delimiter=",")
+np.savetxt("mpjpe_gcnext.txt", mpjpe_data_all, delimiter=",")
 
 plt.figure()
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
