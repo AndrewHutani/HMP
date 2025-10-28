@@ -285,8 +285,8 @@ if __name__ == "__main__":
         plt.figure()
         for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
             plt.plot(downsample_rates, results[:, i], marker='o', label=label)
-        plt.xlabel('Resample Rate')
-        plt.ylabel('Mean MPJPE')
+        plt.xlabel(r'Resample rate $\alpha$')
+        plt.ylabel(r'Mean MPJPE (mm)')
         plt.title(branch_titles[branch])
         plt.gca().invert_xaxis()
         plt.grid(True)
