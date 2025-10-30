@@ -129,7 +129,7 @@ for joint_idx, joint_name in enumerate(joint_names):
     mean_text = f"Mean: [{joint_pos[0]:.3f}, \n{joint_pos[1]:.3f}, \n{joint_pos[2]:.3f}]"
     # ax_skel.text2D(0.05, 0.95, mean_text, transform=ax_skel.transAxes, fontsize=fontsize, verticalalignment='top')
 
-    ax_skel.view_init(elev=8.5, azim=62)
+    ax_skel.view_init(elev=23.5, azim=40)
 
     ax_skel.set_title("Mean Skeleton (active joint highlighted)", fontsize=fontsize)
     ax_skel.legend( loc='upper left', 
