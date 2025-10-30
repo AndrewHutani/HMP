@@ -129,6 +129,7 @@ class RealtimePhysMop:
         # Predict future joint angle data
         # In this function, the first hist_length frames are used as input, and the remaining frames are predicted
         model_output = self.model.forward_dynamics(gt_vertices_norm, gt_q, gt_q_ddot, gt_M_inv, gt_JcT, self.device, mode='test')
+        # model_output = (None, None, None, None, None, None, None)
         return model_output, batch_info
 
     
