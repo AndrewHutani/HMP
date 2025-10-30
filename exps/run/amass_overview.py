@@ -1,70 +1,81 @@
+import os
 
-from config import config
-import torch
 import numpy as np
-import argparse
+import glob
+
 import matplotlib.pyplot as plt
 
 from scipy.stats import gaussian_kde
+from tqdm import tqdm
 
-from datasets.h36m_eval import H36MEval
-# from datasets.h36m import H36MDataset
 
-from visualize_motion import visualize_continuous_motion
-
-config.motion.h36m_target_length = config.motion.h36m_target_length_eval
-dataset = H36MEval(config, 'test')
-
-incomplete_h36m_connections = [
-        (-1, 0), (-1, 4), (-1, 8),
-        (0, 1), (1, 2), (2, 3), 
-        (4, 5), (5, 6), (6, 7),
-        (8, 9), (9, 10), (10, 11), (14, 15),
-        (10, 12), (12, 13), (13, 14), (14, 15), (15, 16),
-        (10, 17), (17, 18), (18, 19), (19, 20), (20, 21)
+amass_connections = [
+        # Spine/Torso/Head
+        (0, 3), (3,6), (6, 9), (9, 12),
+        #Left leg
+        (0, 1), (1, 4), (4, 7),
+        # Right leg
+        (0, 2), (2, 5), (5, 8),
+        # Left arm
+        (6, 10), (10, 13), (13, 15), (15, 17),
+        # Right arm
+        (6, 11), (11, 14), (14, 16), (16, 18)
     ]
+joint_names = [
+    "Spine1",      # 3
+    "LKnee",       # 4
+    "RKnee",       # 5
+    "Spine2",      # 6
+    "LAnkle",      # 7
+    "RAnkle",      # 8
+    "Spine3",      # 9
+    "LFoot",       # 10
+    "RFoot",       # 11
+    "Neck",        # 12
+    "LCollar",     # 13
+    "RCollar",     # 14
+    "Head",        # 15
+    "LShoulder",   # 16
+    "RShoulder",   # 17
+    "LElbow",      # 18
+    "RElbow",      # 19
+    "LWrist",      # 20
+    "RWrist"       # 21
+]
 
-all_full_sequences = []
-for action in dataset._actions:
-    seqs = dataset.get_full_sequences_for_action(action)
-    for motion, root in seqs:
-        all_full_sequences.append(motion)  # motion shape: [num_frames, 32, 3]
-all_full_sequences = np.concatenate(all_full_sequences, axis=0)  # shape: [num_frames_total, 32, 3]
-print("Shape of all full sequences:", all_full_sequences.shape)
-used_joint_indexes = np.array([2,3,4,5,7,8,9,10,12,13,14,15,17,18,19,21,22,25,26,27,29,30]).astype(np.int64)
-
-# Only select the used joints
-all_full_sequences = all_full_sequences[:, used_joint_indexes, :]  # shape: [num_frames_total, 22, 3]
-
-# swap y and z axes
-all_full_sequences = all_full_sequences[:, :, [0, 2, 1]]
-# Compute mean positions for skeleton plot
-mean_positions = np.mean(all_full_sequences, axis=0)  # shape: [22, 3]
-
-relative_positions = all_full_sequences - mean_positions[np.newaxis, :, :]  # shape: [num_frames_total, 22, 3]
-relative_min = np.min(relative_positions)
-relative_max = np.max(relative_positions)
-dist_x_lim = [-max(relative_min, relative_max), max(relative_min, relative_max)]
-dist_x_lim = [-0.5, 0.5]
-
-
-
-joint_names = ["LKnee", "LAnkle", "LFoot", "LToe",
-               "RKnee", "RAnkle", "RFoot", "RToe",
-               "Spine", "Neck", "Head", "Nose",
-               "RShoulder", "RElbow", "RWrist", "RHand", "RThumb",
-               "LShoulder", "LElbow", "LWrist", "LHand", "LThumb"]
 fontsize = 14
 
+data_dir = "exported_gt_joints"
+txt_files = glob.glob(os.path.join(data_dir, "*.txt"))
+
+all_sequences = []
+
+for file in tqdm(txt_files, desc="Loading joint files"):
+    arr = np.loadtxt(file, delimiter=',')
+    arr = arr.reshape(arr.shape[0], -1, 3)
+    all_sequences.append(arr)
+all_sequences = np.concatenate(all_sequences, axis=0)  # shape: [num_frames_total, num_joints, 3]
+print("Shape of all sequences:", all_sequences.shape)
+
+assert all_sequences.shape[1] == len(joint_names), f"The number of joints does not match the joint names list. \n All sequences shape: {all_sequences.shape}, len(joint_names): {len(joint_names)}"
+# Compute mean positions for skeleton plot
+mean_positions = np.mean(all_sequences, axis=0)  # shape: [num_joints, 3]
+
+relative_positions = all_sequences - mean_positions[np.newaxis, :, :]  # shape: [num_frames_total, num_joints, 3]
+flat_rel = relative_positions.reshape(-1)
+low, high = np.percentile(flat_rel, [1, 99])
+# dist_x_lim = [low, high]
+dist_x_lim = [-0.5, 0.5]
+
+num_hist_bins = 200  # You can adjust this
+
 global_ymax = 0
-for joint_idx in range(all_full_sequences.shape[1]):
-    joint_data = all_full_sequences[:, joint_idx, :]
+for joint_idx in range(all_sequences.shape[1]):
+    joint_data = all_sequences[:, joint_idx, :]
     joint_data_centered = joint_data - np.mean(joint_data, axis=0)
     for i in range(3):  # x, y, z
-        kde = gaussian_kde(joint_data_centered[:, i])
-        x_vals = np.linspace(dist_x_lim[0], dist_x_lim[1], 200)
-        density = kde(x_vals)
-        global_ymax = max(global_ymax, np.max(density))
+        hist, bins = np.histogram(joint_data_centered[:, i], bins=num_hist_bins, range=dist_x_lim, density=True)
+        global_ymax = max(global_ymax, np.max(hist))
 
 for joint_idx, joint_name in enumerate(joint_names):
     # fig = plt.figure(figsize=(14.4, 5.2)) # 3 per page in latex
@@ -74,13 +85,14 @@ for joint_idx, joint_name in enumerate(joint_names):
     
     # --- Distribution plot (KDE) ---
     ax_dist = fig.add_subplot(gs[0])
-    joint_data = all_full_sequences[:, joint_idx, :]  # shape: [num_frames, 3]
+    joint_data = all_sequences[:, joint_idx, :]  # shape: [num_frames, 3]
     joint_data_centered = joint_data - np.mean(joint_data, axis=0)
     colors = ['green', 'blue', 'red']
     for i, axis in enumerate(['x', 'y', 'z']):
-        kde = gaussian_kde(joint_data_centered[:, i])
-        x_vals = np.linspace(joint_data_centered[:, i].min(), joint_data_centered[:, i].max(), 200)
-        ax_dist.plot(x_vals, kde(x_vals), color=colors[i], label=axis)
+        data = joint_data_centered[:, i]
+        hist, bins = np.histogram(data, bins=num_hist_bins, range=dist_x_lim, density=True)
+        bin_centers = (bins[:-1] + bins[1:]) / 2
+        ax_dist.plot(bin_centers, hist, color=colors[i], label=axis)
     ax_dist.axvline(0, color='gray', linestyle='--', linewidth=1)
     ax_dist.set_xlim(dist_x_lim)
     ax_dist.set_ylim([0, global_ymax * 1.05])
@@ -104,9 +116,9 @@ for joint_idx, joint_name in enumerate(joint_names):
     ax_skel.set_xticks(np.linspace(-0.5, 0.5, 3))  
     ax_skel.set_yticks(np.linspace(-0.5, 0.5, 3)) 
 
-    mean_positions = np.vstack([mean_positions, np.array([0, 0, 0])])
+    # mean_positions = np.vstack([mean_positions, np.array([0, 0, 0])])
     # Plot skeleton
-    for (i, j) in incomplete_h36m_connections:
+    for (i, j) in amass_connections:
         ax_skel.plot(
             [mean_positions[i, 0], mean_positions[j, 0]],
             [mean_positions[i, 1], mean_positions[j, 1]],
@@ -129,7 +141,7 @@ for joint_idx, joint_name in enumerate(joint_names):
     mean_text = f"Mean: [{joint_pos[0]:.3f}, \n{joint_pos[1]:.3f}, \n{joint_pos[2]:.3f}]"
     # ax_skel.text2D(0.05, 0.95, mean_text, transform=ax_skel.transAxes, fontsize=fontsize, verticalalignment='top')
 
-    ax_skel.view_init(elev=8.5, azim=62)
+    ax_skel.view_init(elev=5.6, azim=-40)
 
     ax_skel.set_title("Mean Skeleton (active joint highlighted)", fontsize=fontsize)
     ax_skel.legend( loc='upper left', 
@@ -144,5 +156,6 @@ for joint_idx, joint_name in enumerate(joint_names):
 
     fig.canvas.mpl_connect('button_release_event', print_view)
     plt.tight_layout()
-    plt.savefig('dataset_overview/h36m_joint_distribution_{}.png'.format(joint_name), dpi=300)
+    plt.savefig('dataset_overview/AMASS/amass_joint_distribution_{}.png'.format(joint_name), dpi=300)
+    # plt.show()
     plt.close(fig)
