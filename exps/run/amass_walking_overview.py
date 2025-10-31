@@ -110,7 +110,16 @@ global_max = all_displacements_flat.max()
 
 # --- For each joint and axis, collect values and times from all cycles ---
 for joint_idx, joint_name in enumerate(joint_names):
+    joint_mean = motion[:, joint_idx, :].mean(axis=0)
+    mean_txt = f"Mean: [{joint_mean[0]:.3f}, {joint_mean[1]:.3f}, {joint_mean[2]:.3f}]"
+
+    fig = plt.figure(figsize=(16, 6))
+    fig.suptitle(f'{joint_name} relative data distribution over gait cycle\n{mean_txt}', fontsize=fontsize)
+    gs = fig.add_gridspec(1, 4, width_ratios=[2, 2, 2, 1.5])
+    axis_surfaces = []
     for axis_idx, axis_name in enumerate(['x', 'y', 'z']):
+        ax_surface = fig.add_subplot(gs[axis_idx], projection='3d')
+        axis_surfaces.append(ax_surface)
         all_times = []
         all_vals = []
         cycle_durations = []
@@ -154,68 +163,83 @@ for joint_idx, joint_name in enumerate(joint_names):
         X = (val_bins[:-1] + val_bins[1:]) / 2
         X, Y = np.meshgrid(X, Y)
         Z = density_matrix
-
-        fig = plt.figure(figsize=(16, 6))
-        gs = fig.add_gridspec(1, 2, width_ratios=[2, 1])
-
-        ax_surface = fig.add_subplot(gs[0], projection='3d')
+    
         surf = ax_surface.plot_surface(X, Y, Z, cmap='viridis')
-        fig.colorbar(surf, ax=ax_surface, shrink=0.5, aspect=10, label='Density', pad=0.08)
+        
         ax_surface.view_init(elev=45, azim=-50)
-        ax_surface.set_xlabel(f'{joint_name} {axis_name} Value (m)', fontsize=fontsize)
-        ax_surface.set_ylabel('Gait Cycle Time (s)', fontsize=fontsize)
-        ax_surface.set_zlabel('Density', fontsize=fontsize)
+        ax_surface.set_xlabel(f'Displacement \nfrom mean (m)', fontsize=fontsize-3, labelpad=10)
+        ax_surface.set_ylabel('Gait Cycle Time (s)', fontsize=fontsize-3)
 
         mean_positions = np.mean(motion, axis=0)
         mean_txt = f"Mean: [{mean_positions[joint_idx, 0]:.3f}, {mean_positions[joint_idx, 1]:.3f}, {mean_positions[joint_idx, 2]:.3f}]"
-        ax_surface.set_title(f'{joint_name} relative {axis_name} data distribution over Gait Cycles\n {mean_txt}', fontsize=fontsize)
-        
-        # --- Skeleton Plot ---
-        mean_positions = np.mean(motion, axis=0)
-        mean_positions = np.vstack([mean_positions, np.array([0, 0, 0])])
-        ax_skel = fig.add_subplot(gs[1], projection='3d')
-        ax_skel.set_xlim([-0.5, 0.5])
-        ax_skel.set_ylim([-0.5, 0.5])
-        ax_skel.set_zlim([-1, 1])
-        ax_skel.set_box_aspect([1, 1, 2])
-        ax_skel.set_xlabel("x")
-        ax_skel.set_ylabel("y")
-        ax_skel.set_zlabel("z", labelpad=15)
-        # ax_skel.tick_params(axis='x', which='major', pad=-5)
-        # ax_skel.tick_params(axis='y', which='major', pad=-5)
-        ax_skel.tick_params(axis='z', which='major', pad=15)
-        ax_skel.set_xticks(np.linspace(-0.5, 0.5, 3))
-        ax_skel.set_yticks(np.linspace(-0.5, 0.5, 3))
+        ax_surface.set_title(f'{axis_name}-axis', fontsize=fontsize)
 
-        for (i, j) in amass_connections:
-            ax_skel.plot(
-                [mean_positions[i, 0], mean_positions[j, 0]],
-                [mean_positions[i, 1], mean_positions[j, 1]],
-                [mean_positions[i, 2], mean_positions[j, 2]],
-                color='gray', linewidth=1.5
-            )
+    xlims = [axis_surfaces[i].get_xlim() for i in range(3)]
+    ylims = [axis_surfaces[i].get_ylim() for i in range(3)]
+    zlims = [axis_surfaces[i].get_zlim() for i in range(3)]
 
-        joint_pos = mean_positions[joint_idx]
-        axis_length = 0.1
-        ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], axis_length, 0, 0, color='green', linewidth=2, label='x')
-        ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], 0, axis_length, 0, color='blue', linewidth=2, label='y')
-        ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], 0, 0, axis_length, color='red', linewidth=2, label='z')
+    axis_surfaces[2].set_zlabel('Density', fontsize=fontsize-3)
 
-        ax_skel.view_init(elev=8.5, azim=62)
-        ax_skel.set_title("Mean Skeleton (active joint highlighted)", fontsize=fontsize)
-        ax_skel.legend(loc='upper left', bbox_to_anchor=(0.8, 1), fontsize=12)
+    for i in range(3):
+        axis_surfaces[i].set_xlim([min(xlims, key=lambda x: x[0])[0], max(xlims, key=lambda x: x[1])[1]])
+        axis_surfaces[i].set_ylim([min(ylims, key=lambda y: y[0])[0], max(ylims, key=lambda y: y[1])[1]])
+        axis_surfaces[i].set_zlim([min(zlims, key=lambda z: z[0])[0], max(zlims, key=lambda z: z[1])[1]])
 
 
-        def print_view(event):
-            azim = ax_surface.azim
-            elev = ax_surface.elev
-            fig_size = fig.get_size_inches()
-            print(f"Current view: elev={elev}, azim={azim}, fig_size={fig_size}")
+    # --- Skeleton Plot ---
+    mean_positions = np.mean(motion, axis=0)
+    mean_positions = np.vstack([mean_positions, np.array([0, 0, 0])])
+    ax_skel = fig.add_subplot(gs[3], projection='3d')
+    ax_skel.set_xlim([-0.5, 0.5])
+    ax_skel.set_ylim([-0.5, 0.5])
+    ax_skel.set_zlim([-1, 1])
+    ax_skel.set_box_aspect([1, 1, 2])
+    ax_skel.set_xlabel("x")
+    ax_skel.set_ylabel("y")
+    ax_skel.set_zlabel("z", labelpad=15)
+    # ax_skel.tick_params(axis='x', which='major', pad=-5)
+    # ax_skel.tick_params(axis='y', which='major', pad=-5)
+    ax_skel.tick_params(axis='z', which='major', pad=15)
+    ax_skel.set_xticks(np.linspace(-0.5, 0.5, 3))
+    ax_skel.set_yticks(np.linspace(-0.5, 0.5, 3))
 
-        fig.canvas.mpl_connect('button_release_event', print_view)
-        
-        plt.subplots_adjust(top=0.88)  # Lower values move plots closer to the top edge
-        # plt.tight_layout()
-        plt.savefig(f'walking_dataset_overview/amass/amass_joint_gaitcycle_surface_{joint_name}_{axis_name}.png', dpi=300)
-        # plt.show()
-        plt.close(fig)
+    for (i, j) in amass_connections:
+        ax_skel.plot(
+            [mean_positions[i, 0], mean_positions[j, 0]],
+            [mean_positions[i, 1], mean_positions[j, 1]],
+            [mean_positions[i, 2], mean_positions[j, 2]],
+            color='gray', linewidth=1.5
+        )
+
+    joint_pos = mean_positions[joint_idx]
+    axis_length = 0.1
+    ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], axis_length, 0, 0, color='green', linewidth=2, label='x')
+    ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], 0, axis_length, 0, color='blue', linewidth=2, label='y')
+    ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], 0, 0, axis_length, color='red', linewidth=2, label='z')
+
+    ax_skel.view_init(elev=8.5, azim=62)
+    ax_skel.set_title("Mean Skeleton \n(active joint highlighted)", fontsize=fontsize)
+    ax_skel.legend(loc='upper left', bbox_to_anchor=(0.8, 1), fontsize=12)
+
+
+    def print_view(event):
+        azim = ax_surface.azim
+        elev = ax_surface.elev
+        fig_size = fig.get_size_inches()
+        print(f"Current view: elev={elev}, azim={azim}, fig_size={fig_size}")
+
+    fig.canvas.mpl_connect('button_release_event', print_view)
+
+    plt.subplots_adjust(
+        left=0.03,   # Reduce left margin
+        right=0.98,  # Reduce right margin
+        top=0.50,    # Reduce top margin
+        bottom=0.08, # Reduce bottom margin
+        wspace=0.18  # Reduce horizontal space between subplots
+    )
+    
+    plt.subplots_adjust(top=0.88)  # Lower values move plots closer to the top edge
+    # plt.tight_layout()
+    plt.savefig(f'walking_dataset_overview/amass/amass_joint_gaitcycle_surface_{joint_name}.png', dpi=300)
+    # plt.show()
+    plt.close(fig)
