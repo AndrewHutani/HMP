@@ -176,7 +176,7 @@ for joint_idx, joint_name in enumerate(joint_names):
         )
 
     joint_pos = mean_positions[joint_idx]
-    axis_length = 0.1
+    axis_length = 0.2
     ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], axis_length, 0, 0, color='green', linewidth=2, label='x')
     ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], 0, axis_length, 0, color='blue', linewidth=2, label='y')
     ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], 0, 0, axis_length, color='red', linewidth=2, label='z')
