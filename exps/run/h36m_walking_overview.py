@@ -105,6 +105,7 @@ for joint_idx, joint_name in enumerate(joint_names):
         avg_cycle_time = np.mean(cycle_durations)
 
         # Bin by normalized time and value
+        num_time_bins = int(np.ceil(np.mean(avg_cycle_time) * 25))
         val_bins = np.linspace(global_min, global_max, num_bins)
         time_bins = np.linspace(0, avg_cycle_time, num_time_bins + 1)
         density_matrix = np.zeros((num_time_bins, num_bins-1))
@@ -133,7 +134,10 @@ for joint_idx, joint_name in enumerate(joint_names):
         ax_surface.set_xlabel(f'{joint_name} {axis_name} Value (m)', fontsize=fontsize)
         ax_surface.set_ylabel('Gait Cycle Time (s)', fontsize=fontsize)
         ax_surface.set_zlabel('Density', fontsize=fontsize)
-        ax_surface.set_title(f'{joint_name} {axis_name} Distribution Over Gait Cycles (Actual Time)', fontsize=fontsize)
+        ax_surface.view_init(elev=45, azim=-50)
+        mean_positions = np.mean(motion.numpy(), axis=0)
+        mean_txt = f"Mean: [{mean_positions[joint_idx, 0]:.3f}, {mean_positions[joint_idx, 1]:.3f}, {mean_positions[joint_idx, 2]:.3f}]"
+        ax_surface.set_title(f'{joint_name} relative {axis_name} data distribution over Gait Cycles\n {mean_txt}', fontsize=fontsize)
 
         # --- Skeleton Plot ---
         mean_positions = np.mean(motion.numpy(), axis=0)
@@ -163,13 +167,11 @@ for joint_idx, joint_name in enumerate(joint_names):
         ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], 0, axis_length, 0, color='blue', linewidth=2, label='y')
         ax_skel.quiver(joint_pos[0], joint_pos[1], joint_pos[2], 0, 0, axis_length, color='red', linewidth=2, label='z')
 
-        mean_text = f"Mean: [{joint_pos[0]:.3f}, \n{joint_pos[1]:.3f}, \n{joint_pos[2]:.3f}]"
-        ax_skel.text2D(0.05, 0.95, mean_text, transform=ax_skel.transAxes, fontsize=fontsize, verticalalignment='top')
-
         ax_skel.view_init(elev=8.5, azim=62)
         ax_skel.set_title("Mean Skeleton (active joint highlighted)", fontsize=fontsize)
         ax_skel.legend(loc='upper left', bbox_to_anchor=(0.8, 1), fontsize=12)
 
-        plt.tight_layout()
+        # plt.tight_layout()
         plt.savefig(f'walking_dataset_overview/h36m_joint_gaitcycle_surface_{joint_name}_{axis_name}.png', dpi=300)
+        # plt.show()
         plt.close(fig)

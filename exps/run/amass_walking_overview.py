@@ -160,7 +160,7 @@ for joint_idx, joint_name in enumerate(joint_names):
 
         ax_surface = fig.add_subplot(gs[0], projection='3d')
         surf = ax_surface.plot_surface(X, Y, Z, cmap='viridis')
-        fig.colorbar(surf, ax=ax_surface, shrink=0.5, aspect=10, label='Density')
+        fig.colorbar(surf, ax=ax_surface, shrink=0.5, aspect=10, label='Density', pad=0.08)
         ax_surface.view_init(elev=45, azim=-50)
         ax_surface.set_xlabel(f'{joint_name} {axis_name} Value (m)', fontsize=fontsize)
         ax_surface.set_ylabel('Gait Cycle Time (s)', fontsize=fontsize)
@@ -178,8 +178,8 @@ for joint_idx, joint_name in enumerate(joint_names):
         ax_skel.set_ylim([-0.5, 0.5])
         ax_skel.set_zlim([-1, 1])
         ax_skel.set_box_aspect([1, 1, 2])
-        ax_skel.set_xlabel("x", labelpad=-3)
-        ax_skel.set_ylabel("y", labelpad=-3)
+        ax_skel.set_xlabel("x")
+        ax_skel.set_ylabel("y")
         ax_skel.set_zlabel("z", labelpad=15)
         # ax_skel.tick_params(axis='x', which='major', pad=-5)
         # ax_skel.tick_params(axis='y', which='major', pad=-5)
@@ -215,7 +215,7 @@ for joint_idx, joint_name in enumerate(joint_names):
         fig.canvas.mpl_connect('button_release_event', print_view)
         
         plt.subplots_adjust(top=0.88)  # Lower values move plots closer to the top edge
-        plt.tight_layout()
-        plt.savefig(f'walking_dataset_overview/amass/amass_joint_gaitcycle_surface_{joint_name}_{axis_name}.png', bbox_inches="tight", pad_inches=0.05, dpi=300)
+        # plt.tight_layout()
+        plt.savefig(f'walking_dataset_overview/amass/amass_joint_gaitcycle_surface_{joint_name}_{axis_name}.png', dpi=300)
         # plt.show()
         plt.close(fig)
