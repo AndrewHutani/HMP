@@ -78,8 +78,8 @@ back_to_front = np.mean([back_to_front_upper, back_to_front_lower], axis=0)  # s
 front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 8)
 
 # # Select the relevant columns for the 4 timesteps
-back_to_front = back_to_front[:, [0, 1, 4, 7]]  # shape: (50, 4)
-front_to_back = front_to_back[:, [0, 1, 4, 7]]  # shape: (50, 4)
+back_to_front = back_to_front[:, [0, 3, 4, 7]]  # shape: (50, 4)
+front_to_back = front_to_back[:, [0, 3, 4, 7]]  # shape: (50, 4)
 
 
 def mean_absolute_difference(back_to_front, front_to_back):

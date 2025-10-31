@@ -82,35 +82,32 @@ with open(log_filename, "w") as log_file:
         mpjpe_upper_mean = np.mean(mpjpe_upper_all_samples, axis=0)  # shape: (obs_len, 4)
         mpjpe_upper_std = np.std(mpjpe_upper_all_samples, axis=0)  # shape: (obs_len, 4)
         mpjpe_lower_mean = np.mean(mpjpe_lower_all_samples, axis=0)  # shape: (obs_len, 4)
-        mpjpe_lower_std = np.std(mpjpe_lower_all_samples, axis=0)  # shape: (obs_len, 4)
 
         # Write to log file
         log_file.write(f"Averaged MPJPE (upper body) for each observation length and each selected timestep:\n")
         for obs_len in range(mpjpe_upper_mean.shape[0]):
             log_file.write(f"Obs {obs_len+1}: {mpjpe_upper_mean[obs_len]}\n")
-            log_file.write(f"Std {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mpjpe_upper_std[obs_len]]) + "]\n")
-        log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep: {action}\n")
+            log_file.write(f"Std {obs_len+1}: {mpjpe_upper_std[obs_len]}\n")
+        log_file.write(f"Averaged MPJPE (lower body) for each observation length and each selected timestep:\n")
         for obs_len in range(mpjpe_lower_mean.shape[0]):
             log_file.write(f"Obs {obs_len+1}: {mpjpe_lower_mean[obs_len]}\n")
-            log_file.write(f"Std {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in mpjpe_lower_std[obs_len]]) + "]\n")
+            log_file.write(f"Std {obs_len+1}: {mpjpe_lower_std[obs_len]}\n")
 
-        percentile_25_upper = np.percentile(mpjpe_upper_all_samples, 25, axis=0)
-        percentile_75_upper = np.percentile(mpjpe_upper_all_samples, 75, axis=0)
-        log_file.write(f"25th percentile (upper body) for each observation length and each selected timestep: {action}\n")
+        log_file.write("25th percentile MPJPE (upper body) for each observation length and each selected timestep:\n")
         for obs_len in range(percentile_25_upper.shape[0]):
-            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in percentile_25_upper[obs_len]]) + "]\n")
-        log_file.write(f"75th percentile (upper body) for each observation length and each selected timestep: {action}:\n")
+            log_file.write(f"Obs {obs_len+1}: {percentile_25_upper[obs_len]}\n")
+        log_file.write("75th percentile MPJPE (upper body) for each observation length and each selected timestep:\n")
         for obs_len in range(percentile_75_upper.shape[0]):
-            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in percentile_75_upper[obs_len]]) + "]\n")
+            log_file.write(f"Obs {obs_len+1}: {percentile_75_upper[obs_len]}\n")
 
-        percentile_25_lower = np.percentile(mpjpe_lower_all_samples, 25, axis=0)
-        percentile_75_lower = np.percentile(mpjpe_lower_all_samples, 75, axis=0)
-        log_file.write(f"25th percentile MPJPE (lower body) for each observation length and each selected timestep: {action}\n")
+        log_file.write("25th percentile MPJPE (lower body) for each observation length and each selected timestep:\n")
         for obs_len in range(percentile_25_lower.shape[0]):
-            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in percentile_25_lower[obs_len]]) + "]\n")
-        log_file.write(f"75th percentile MPJPE (lower body) for each observation length and each selected timestep: {action}\n")
+            log_file.write(f"Obs {obs_len+1}: {percentile_25_lower[obs_len]}\n")
+
+        log_file.write("75th percentile MPJPE (lower body) for each observation length and each selected timestep:\n")
         for obs_len in range(percentile_75_lower.shape[0]):
-            log_file.write(f"Obs {obs_len+1}: [" + " ".join([f"{v:.6f}" for v in percentile_75_lower[obs_len]]) + "]\n")
+            log_file.write(f"Obs {obs_len+1}: {percentile_75_lower[obs_len]}\n")
+
         log_file.write("\n")
 
 print(f"MPJPE logs saved to {log_filename}")

@@ -173,10 +173,10 @@ def parse_percentile_data_physmop(filename, body_part, percentile):
 
 upper_data = parse_physmop_data("physmop_data_mpjpe_log.txt", "upper body")
 lower_data = parse_physmop_data("physmop_data_mpjpe_log.txt", "lower body")
-# upper_physics = parse_physmop_data("physmop_physics_mpjpe_log.txt", "upper body")
-# lower_physics = parse_physmop_data("physmop_physics_mpjpe_log.txt", "lower body")
-# upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "upper body")
-# lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "lower body")
+upper_physics = parse_physmop_data("physmop_physics_mpjpe_log.txt", "upper body")
+lower_physics = parse_physmop_data("physmop_physics_mpjpe_log.txt", "lower body")
+upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "upper body")
+lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "lower body")
 upper_data_25 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "upper body", "25th")
 upper_data_75 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "upper body", "75th")
 lower_data_25 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "lower body", "25th")
@@ -188,6 +188,13 @@ upper_25 = parse_percentile_data("mpjpe_log.txt", "upper body", "25th")
 upper_75 = parse_percentile_data("mpjpe_log.txt", "upper body", "75th")
 lower_25 = parse_percentile_data("mpjpe_log.txt", "lower body", "25th")
 lower_75 = parse_percentile_data("mpjpe_log.txt", "lower body", "75th")
+
+upper_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "upper body")
+lower_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "lower body")
+
+upper_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "upper body")
+lower_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "lower body")
+
 
 print(lower_data_25.shape)  # (50, 8)
 # Aggregate by group
@@ -226,26 +233,24 @@ def find_diminishing_returns_percentage(data, improvement_threshold=2.0):
     return diminishing_points
 
 
-upper_data = upper_data[:, [0, 1, 4, 7]]
-lower_data = lower_data[:, [0, 1, 4, 7]]
-# upper_physics = upper_physics[:, [0, 1, 4, 7]]
-# lower_physics = lower_physics[:, [0, 1, 4, 7]]
-# upper_fusion = upper_fusion[:, [0, 1, 4, 7]]
-# lower_fusion = lower_fusion[:, [0, 1, 4, 7]]
+upper_data = upper_data[:, [0, 3, 4, 7]]
+lower_data = lower_data[:, [0, 3, 4, 7]]
+upper_physics = upper_physics[:, [0, 3, 4, 7]]
+lower_physics = lower_physics[:, [0, 3, 4, 7]]
+upper_fusion = upper_fusion[:, [0, 3, 4, 7]]
+lower_fusion = lower_fusion[:, [0, 3, 4, 7]]
+upper_data_longer = upper_data_longer[:, [0, 3, 4, 7]]
+lower_data_longer = lower_data_longer[:, [0, 3, 4, 7]]
 
-upper_gcn_avg = group_average(actions, upper_gcn_avg)
+upper_gcn = group_average(actions, upper_gcn_avg)
 upper_gcn_std = group_average(actions, upper_gcn_std)
-lower_gcn_avg = group_average(actions, lower_gcn_avg)
+lower_gcn = group_average(actions, lower_gcn_avg)
 lower_gcn_std = group_average(actions, lower_gcn_std)
 upper_25 = group_average(actions, upper_25)
 upper_75 = group_average(actions, upper_75)
 lower_25 = group_average(actions, lower_25)
 lower_75 = group_average(actions, lower_75)
 
-upper_data_25 = upper_data_25[:, [0, 1, 4, 7]]
-upper_data_75 = upper_data_75[:, [0, 1, 4, 7]]
-lower_data_25 = lower_data_25[:, [0, 1, 4, 7]]
-lower_data_75 = lower_data_75[:, [0, 1, 4, 7]]
 
 
 upper_diminishing_pct = find_diminishing_returns_percentage(upper_gcn, improvement_threshold=1.0)
@@ -255,96 +260,28 @@ lower_diminishing_pct = find_diminishing_returns_percentage(lower_gcn, improveme
 print("Upper body diminishing returns (1% threshold) at frames:", upper_diminishing_pct)
 print("Lower body diminishing returns (1% threshold) at frames:", lower_diminishing_pct)
 
-# Compute relative MPJPE (percentage of first observation)
-def relative_mpjpe(avg):
-    return 100 * avg / avg[0]  # shape: (50, 4)
-
-# upper_rel = relative_mpjpe(upper_data)
-# lower_rel = relative_mpjpe(lower_data)
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 x_vals = np.arange(1, len(upper_data) + 1)
 
-plt.figure(figsize=(10,6))
-for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(x_vals, upper_data[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
-    plt.fill_between(x_vals, upper_data_25[:, i], upper_data_75[:, i], color=colors[i], alpha=0.2)
-    # plt.plot(lower_gcn_avg[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
-    # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
-plt.xlabel("Number of Observed Frames")
-plt.ylabel("Relative MPJPE (mm)")
-plt.title("Relative MPJPE for the Data Branch vs. Observed Frames")
-
-# First legend
-first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
-second_line = Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms')
-third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms')
-fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
-
-# Second legend
-line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Upper")
-line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Lower")
-# line_dotted = Line2D([], [], color='black', linestyle='-.', linewidth=1.5, label="Physics")
-
-# Combine all handles and labels into one legend
-all_handles = [
-    first_line, second_line, third_line, fourth_line,  # Timesteps/colors
-    line_solid, line_dashed, #line_dotted               # Line types
+all_arrays = [
+    upper_data, lower_data,
+    upper_physics, lower_physics,
+    upper_fusion, lower_fusion,
+    upper_gcn, lower_gcn,
+    # upper_data_longer, lower_data_longer
 ]
-all_labels = [
-    '80ms', '400ms', '560ms', '1000ms',               # Timesteps/colors
-    'Upper', 'Lower', #'Physics'                       # Line types
-]
+all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
+y_min = np.min(all_data[all_data > 0])  # Avoid zero for log scale
+y_max = np.percentile(all_data, 100)
+y_limits = (y_min, y_max)
 
-plt.legend(
-    handles=all_handles,
-    labels=all_labels,
-    loc='best',
-    # bbox_to_anchor=(1.6, 1.0),
-    title='Predicted Timesteps into the Future'
-)
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+plot_and_save(upper_data, lower_data, "PhysMoP", "Data", x_vals, colors, y_limits)
+plot_and_save(upper_physics, lower_physics, "PhysMoP", "Physics", x_vals, colors, y_limits)
+plot_and_save(upper_fusion, lower_fusion, "PhysMoP", "Fusion", x_vals, colors, y_limits)
 
-plt.figure(figsize=(10,6))
-for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(x_vals, lower_data[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='-')
-    plt.fill_between(x_vals, lower_data_25[:, i], lower_data_75[:, i], color=colors[i], alpha=0.2)
-    # plt.plot(lower_gcn_avg[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
-    # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
-plt.xlabel("Number of Observed Frames")
-plt.ylabel("Relative MPJPE (mm)")
-plt.title("Relative MPJPE for the Data Branch vs. Observed Frames")
-
-# First legend
-first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
-second_line = Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms')
-third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms')
-fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
-
-# Second legend
-line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Upper")
-line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Lower")
-# line_dotted = Line2D([], [], color='black', linestyle='-.', linewidth=1.5, label="Physics")
-
-# Combine all handles and labels into one legend
-all_handles = [
-    first_line, second_line, third_line, fourth_line,  # Timesteps/colors
-    line_solid, line_dashed, #line_dotted               # Line types
-]
-all_labels = [
-    '80ms', '400ms', '560ms', '1000ms',               # Timesteps/colors
-    'Upper', 'Lower', #'Physics'                       # Line types
-]
-
-plt.legend(
-    handles=all_handles,
-    labels=all_labels,
-    loc='best',
-    # bbox_to_anchor=(1.6, 1.0),
-    title='Predicted Timesteps into the Future'
-)
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+x_vals = np.arange(1, len(upper_gcn) + 1)
+print(upper_gcn.shape, lower_gcn.shape)
+plot_and_save(upper_gcn, lower_gcn, "GCNext", "Data", x_vals, colors, y_limits)
+plot_and_save(upper_gcn_on_amass, lower_gcn_on_amass, "GCNext_on_AMASS", "Data_on_AMASS", x_vals, colors, y_limits)
+# plot_and_save(upper_data_longer, lower_data_longer, "PhysMoP", "Data (Longer)", x_vals, colors, y_limits)
