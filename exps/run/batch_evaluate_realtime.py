@@ -20,7 +20,7 @@ args = parser.parse_args()
 
 # Prepare model
 model = Model(config, args.dyna)
-state_dict = torch.load(args.model_pth)
+state_dict = torch.load(args.model_pth, map_location=torch.device('cpu'))
 model.load_state_dict(state_dict, strict=True)
 
 
@@ -80,6 +80,7 @@ with open(log_filename, "w") as log_file:
         mpjpe_lower_all_samples = np.array(mpjpe_lower_all_samples)  # shape: (num_samples, obs_len, 4)
 
         mpjpe_upper_mean = np.mean(mpjpe_upper_all_samples, axis=0)  # shape: (obs_len, 4)
+        mpjpe_upper_std = np.std(mpjpe_upper_all_samples, axis=0)  # shape: (obs_len, 4)
         mpjpe_lower_mean = np.mean(mpjpe_lower_all_samples, axis=0)  # shape: (obs_len, 4)
 
         mpjpe_upper_std = np.std(mpjpe_upper_all_samples, axis=0)

@@ -115,36 +115,88 @@ def parse_physmop_data(filename, body_part):
 # Parse the data
 def parse_gcn_data(filename, body_part):
     import re
-    action_data = {}
+    action_data_avg = {}
+    action_data_std = {}
     current_action = None
     with open(filename, "r") as f:
         for line in f:
             m = re.match(r"Averaged MPJPE \((.+)\) for each observation length and each selected timestep: (.+)", line)
             if m and m.group(1).strip().lower() == body_part.lower():
                 current_action = m.group(2).strip().lower()  # <-- action name as key
-                action_data[current_action] = []
+                action_data_avg[current_action] = []
+                action_data_std[current_action] = []
             elif line.startswith("Obs") and current_action:
                 arr = re.findall(r"\[([^\]]+)\]", line)
                 if arr:
-                    action_data[current_action].append([float(x) for x in arr[0].split()])
-    return action_data
+                    action_data_avg[current_action].append([float(x) for x in arr[0].split()])
+            elif line.startswith("Std") and current_action:
+                arr = re.findall(r"\[([^\]]+)\]", line)
+                if arr:
+                    action_data_std[current_action].append([float(x) for x in arr[0].split()])
+    return action_data_avg, action_data_std
 
-upper_data = parse_physmop_data("physmop_data_mpjpe_log_front_to_back.txt", "upper body")
-lower_data = parse_physmop_data("physmop_data_mpjpe_log_front_to_back.txt", "lower body")
-upper_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt", "upper body")
-lower_physics = parse_physmop_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
-upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "upper body")
-lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log_front_to_back.txt", "lower body")
+def parse_percentile_data(filename, body_part, percentile):
+    percentile_data = {}
+    current_action = None
+    with open(filename, "r") as f:
+        for line in f:
+            m = re.match(
+                rf"{percentile} percentile \(({body_part})\) for each observation length and each selected timestep: (.+)",
+                line.strip()
+            )
+            if m:
+                current_action = m.group(2).strip().lower()  # <-- action name as key
+                percentile_data[current_action] = []
+            elif line.startswith("Obs") and current_action:
+                arr = re.findall(r"\[([^\]]+)\]", line)
+                if arr:
+                    percentile_data[current_action].append([float(x) for x in arr[0].split()])
+    return percentile_data
+
+def parse_percentile_data_physmop(filename, body_part, percentile):
+    data = []
+    found_section = False
+    header = f"{percentile} percentile ({body_part}) for each observation length and each selected timestep:"
+    with open(filename, "r") as f:
+        for line in f:
+            if line.strip() == header:
+                found_section = True
+                continue
+            if found_section:
+                if line.startswith("Obs"):
+                    arr = re.findall(r"\[([^\]]+)\]", line)
+                    if arr:
+                        data.append([float(x) for x in arr[0].split()])
+                elif line.strip() == "":
+                    break  # End of section
+    return np.array(data)
+
+upper_data = parse_physmop_data("physmop_data_mpjpe_log.txt", "upper body")
+lower_data = parse_physmop_data("physmop_data_mpjpe_log.txt", "lower body")
+upper_physics = parse_physmop_data("physmop_physics_mpjpe_log.txt", "upper body")
+lower_physics = parse_physmop_data("physmop_physics_mpjpe_log.txt", "lower body")
+upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "upper body")
+lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "lower body")
+upper_data_25 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "upper body", "25th")
+upper_data_75 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "upper body", "75th")
+lower_data_25 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "lower body", "25th")
+lower_data_75 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "lower body", "75th")
+
+upper_gcn_avg, upper_gcn_std = parse_gcn_data("mpjpe_log.txt", "upper body")
+lower_gcn_avg, lower_gcn_std = parse_gcn_data("mpjpe_log.txt", "lower body")
+upper_25 = parse_percentile_data("mpjpe_log.txt", "upper body", "25th")
+upper_75 = parse_percentile_data("mpjpe_log.txt", "upper body", "75th")
+lower_25 = parse_percentile_data("mpjpe_log.txt", "lower body", "25th")
+lower_75 = parse_percentile_data("mpjpe_log.txt", "lower body", "75th")
+
 upper_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "upper body")
 lower_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "lower body")
 
 upper_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "upper body")
 lower_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "lower body")
 
-upper_gcn = parse_gcn_data("mpjpe_log.txt", "upper body")
-lower_gcn = parse_gcn_data("mpjpe_log.txt", "lower body")
-print(upper_gcn_on_amass.shape, lower_gcn_on_amass.shape)
 
+print(lower_data_25.shape)  # (50, 8)
 # Aggregate by group
 def group_average(actions, action_data):
     group = []
@@ -155,8 +207,31 @@ def group_average(actions, action_data):
         return np.mean(np.stack(group), axis=0)  # shape: (50, 4)
     else:
         return None
-upper_gcn = group_average(actions, upper_gcn)
-lower_gcn = group_average(actions, lower_gcn)
+    
+def find_diminishing_returns_percentage(data, improvement_threshold=2.0):
+    """Find where percentage improvement drops below threshold"""
+    diminishing_points = []
+    
+    for timestep in range(data.shape[1]):
+        timeseries = data[:, timestep]
+        percentage_improvements = []
+        
+        for i in range(1, len(timeseries)):
+            if timeseries[i-1] != 0:  # Avoid division by zero
+                improvement = abs((timeseries[i-1] - timeseries[i]) / timeseries[i-1] * 100)
+                percentage_improvements.append(improvement)
+            else:
+                percentage_improvements.append(0)
+        
+        # Find first point where improvement drops below threshold
+        below_threshold = np.where(np.array(percentage_improvements) < improvement_threshold)[0]
+        if len(below_threshold) > 0:
+            diminishing_points.append(below_threshold[0] + 1)  # +1 because we started from index 1
+        else:
+            diminishing_points.append(len(data) - 1)
+    
+    return diminishing_points
+
 
 upper_data = upper_data[:, [0, 3, 4, 7]]
 lower_data = lower_data[:, [0, 3, 4, 7]]
@@ -164,6 +239,27 @@ upper_physics = upper_physics[:, [0, 3, 4, 7]]
 lower_physics = lower_physics[:, [0, 3, 4, 7]]
 upper_fusion = upper_fusion[:, [0, 3, 4, 7]]
 lower_fusion = lower_fusion[:, [0, 3, 4, 7]]
+upper_data_longer = upper_data_longer[:, [0, 3, 4, 7]]
+lower_data_longer = lower_data_longer[:, [0, 3, 4, 7]]
+
+upper_gcn = group_average(actions, upper_gcn_avg)
+upper_gcn_std = group_average(actions, upper_gcn_std)
+lower_gcn = group_average(actions, lower_gcn_avg)
+lower_gcn_std = group_average(actions, lower_gcn_std)
+upper_25 = group_average(actions, upper_25)
+upper_75 = group_average(actions, upper_75)
+lower_25 = group_average(actions, lower_25)
+lower_75 = group_average(actions, lower_75)
+
+
+
+upper_diminishing_pct = find_diminishing_returns_percentage(upper_gcn, improvement_threshold=1.0)
+lower_diminishing_pct = find_diminishing_returns_percentage(lower_gcn, improvement_threshold=1.0)
+
+
+print("Upper body diminishing returns (1% threshold) at frames:", upper_diminishing_pct)
+print("Lower body diminishing returns (1% threshold) at frames:", lower_diminishing_pct)
+
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 x_vals = np.arange(1, len(upper_data) + 1)
@@ -173,7 +269,7 @@ all_arrays = [
     upper_physics, lower_physics,
     upper_fusion, lower_fusion,
     upper_gcn, lower_gcn,
-    upper_data_longer, lower_data_longer
+    # upper_data_longer, lower_data_longer
 ]
 all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
 y_min = np.min(all_data[all_data > 0])  # Avoid zero for log scale
@@ -188,4 +284,4 @@ x_vals = np.arange(1, len(upper_gcn) + 1)
 print(upper_gcn.shape, lower_gcn.shape)
 plot_and_save(upper_gcn, lower_gcn, "GCNext", "Data", x_vals, colors, y_limits)
 plot_and_save(upper_gcn_on_amass, lower_gcn_on_amass, "GCNext_on_AMASS", "Data_on_AMASS", x_vals, colors, y_limits)
-plot_and_save(upper_data_longer, lower_data_longer, "PhysMoP", "Data (Longer)", x_vals, colors, y_limits)
+# plot_and_save(upper_data_longer, lower_data_longer, "PhysMoP", "Data (Longer)", x_vals, colors, y_limits)

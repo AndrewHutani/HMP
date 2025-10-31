@@ -29,17 +29,64 @@ def parse_action_data(filename, body_part):
                     break  # End of section
     return np.array(data)
 
-back_to_front_upper = parse_action_data("physmop_physics_mpjpe_log.txt", "upper body")
-back_to_front_lower = parse_action_data("physmop_physics_mpjpe_log.txt", "lower body")
-front_to_back_upper = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "upper body")
-front_to_back_lower = parse_action_data("physmop_physics_mpjpe_log_front_to_back.txt", "lower body")
+def parse_gcn_data(filename):
+    import re
+    action_data = {}
+    current_action = None
+    with open(filename, "r") as f:
+        for line in f:
+            m = re.match(r"Averaged MPJPE for each observation length and each selected timestep:\s*(.+)", line)
+            if m:
+                current_action = m.group(1).strip().lower()  # <-- action name as key
+                action_data[current_action] = []
+            elif line.startswith("Obs") and current_action:
+                arr = re.findall(r"\[([^\]]+)\]", line)
+                if arr:
+                    action_data[current_action].append([float(x) for x in arr[0].split()])
+    return action_data
+
+# Aggregate by group
+def group_average(actions, action_data):
+    group = []
+    for act in actions:
+        # Convert action to lowercase for case-insensitive comparison
+        act_lower = act.lower()
+        # Check if the lowercase action is in the keys of action_data
+        if act_lower in action_data:
+            group.append(np.array(action_data[act_lower][:50]))  # Use act_lower, not act
+    if group:
+        return np.mean(np.stack(group), axis=0)  # shape: (50, 4)
+    else:
+        return None
+
+# back_to_front_upper = parse_gcn_data("gcnext_performance_back_to_front.txt")
+# back_to_front_lower = parse_gcn_data("gcnext_performance_back_to_front.txt")
+# front_to_back_upper = parse_gcn_data("gcnext_performance_front_to_back.txt")
+# front_to_back_lower = parse_gcn_data("gcnext_performance_front_to_back.txt")
+# back_to_front_upper = group_average(all_actions, back_to_front_upper)
+# back_to_front_lower = group_average(all_actions, back_to_front_lower)
+# front_to_back_upper = group_average(all_actions, front_to_back_upper)
+# front_to_back_lower = group_average(all_actions, front_to_back_lower)
+back_to_front_upper = parse_action_data("physmop_data_mpjpe_log.txt", "upper body")
+back_to_front_lower = parse_action_data("physmop_data_mpjpe_log.txt", "lower body")
+front_to_back_upper = parse_action_data("physmop_data_mpjpe_log_front_to_back.txt", "upper body")
+front_to_back_lower = parse_action_data("physmop_data_mpjpe_log_front_to_back.txt", "lower body")
+
+
 # Combine upper and lower body data for back-to-front and front-to-back
 back_to_front = np.mean([back_to_front_upper, back_to_front_lower], axis=0)  # shape: (50, 8)
 front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 8)
 
-# Select the relevant columns for the 4 timesteps
-back_to_front = back_to_front[:, [0, 1, 4, 7]]  # shape: (50, 4)
-front_to_back = front_to_back[:, [0, 1, 4, 7]]  # shape: (50, 4)
+# # Select the relevant columns for the 4 timesteps
+back_to_front = back_to_front[:, [0, 3, 4, 7]]  # shape: (50, 4)
+front_to_back = front_to_back[:, [0, 3, 4, 7]]  # shape: (50, 4)
+
+
+def mean_absolute_difference(back_to_front, front_to_back):
+    return np.mean(np.abs(back_to_front - front_to_back), axis=0)
+
+mad = mean_absolute_difference(back_to_front, front_to_back)
+print("Mean Absolute Difference (MAD):", mad)
 
 # Aggregate by group
 def group_average(actions, action_data):
