@@ -6,7 +6,6 @@ from visualize_motion import visualize_motion_with_ground_truth, visualize_conti
 from dataset.full_sequence_dataset_test import BaseDataset_test
 
 import utils.config as config
-from torchviz import make_dot
 from prediction_times import prediction_times
 import time
 import numpy as np
@@ -44,7 +43,7 @@ if __name__ == "__main__":
         # # Use a sliding window of some sort to feed the model the correct amount of data
         for i in range(num_of_samples):
             input_batch = {key: value[:,i*config.total_length:i*config.total_length+config.total_length] for key, value in batch.items()}
-            print(f"Input batch shape: {input_batch['q'].shape}")
+            print(f"Input batch shape: {input_batch['q'].shape} of type {type(input_batch['q'])}")
 
             t0 = time.perf_counter()
             model_output, batch_info = realtime_model.predict(input_batch)

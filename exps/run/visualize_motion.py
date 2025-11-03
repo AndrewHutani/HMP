@@ -315,14 +315,14 @@ def visualize_input_and_output_gcnext(input_positions, predicted_positions, grou
             plt.show()
     plt.close()
 
-def visualize_input_and_output_physmop(ground_truth_positions, predicted_positions, num_input_frames,
-                                skeleton_type=None,
-                                save_mp4_path=None):
+def visualize_input_and_output_physmop(ground_truth_positions, predicted_positions, 
+                                       num_input_frames,
+                                       num_predicted_frames,
+                                       skeleton_type=None,
+                                       save_mp4_path=None):
     """
-    Biggest difference is that the the physmop model concatenates the input and output together
+    Biggest difference here is that the input frames are part of the ground truth,
     """
-
-    
     if skeleton_type == 'amass':
         connections = amass_connections
 
@@ -331,8 +331,12 @@ def visualize_input_and_output_physmop(ground_truth_positions, predicted_positio
     ax = fig.add_subplot(111, projection='3d')
     ax.view_init(elev=20, azim=55)
 
-    total_frames = predicted_positions
+    total_frames = num_input_frames + num_predicted_frames
 
+    input_positions = ground_truth_positions[num_predicted_frames - num_input_frames : (num_predicted_frames)]
+
+    predicted_positions = predicted_positions[num_predicted_frames:]
+    ground_truth_positions = ground_truth_positions[num_predicted_frames:]
     def update(frame_idx):
         ax.clear()
         ax.set_xlim([-1, 1])
@@ -344,7 +348,7 @@ def visualize_input_and_output_physmop(ground_truth_positions, predicted_positio
 
         if frame_idx < len(input_positions):
             ax.set_title(f"Input Motion - Frame: {frame_idx}")
-            joints = input_positions[frame_idx]
+            joints = input_positions[frame_idx].detach().cpu().numpy()
             # Add artificial origin as the last joint
             joints = np.vstack([joints, np.array([0, 0, 0])])
             for connection in connections:
@@ -355,7 +359,7 @@ def visualize_input_and_output_physmop(ground_truth_positions, predicted_positio
         else:
             out_idx = frame_idx - len(input_positions)
             ax.set_title(f"Predicted vs Ground Truth - Frame: {out_idx}")
-            joints_pred = predicted_positions[out_idx]
+            joints_pred = predicted_positions[out_idx].detach().cpu().numpy()
             # Add artificial origin as the last joint
             joints_pred = np.vstack([joints_pred, np.array([0, 0, 0])])
             for connection in connections:
@@ -364,7 +368,7 @@ def visualize_input_and_output_physmop(ground_truth_positions, predicted_positio
                         [joints_pred[joint1, 1], joints_pred[joint2, 1]],
                         [joints_pred[joint1, 2], joints_pred[joint2, 2]], 'b', alpha=0.7, label='Prediction' if connection == connections[0] else "")
             # Plot ground truth
-            joints_gt = ground_truth_positions[out_idx]
+            joints_gt = ground_truth_positions[out_idx].detach().cpu().numpy()
             # Add artificial origin as the last joint
             joints_gt = np.vstack([joints_gt, np.array([0, 0, 0])])
             for connection in connections:
