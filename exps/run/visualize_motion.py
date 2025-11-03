@@ -8,9 +8,14 @@ from datasets.h36m_eval import H36MEval
 import torch
 from utils.misc import expmap2rotmat_torch, find_indices_256, find_indices_srnn, rotmat2xyz_torch
 import matplotlib.animation as animation
-from matplotlib.animation import PillowWriter
+from matplotlib.animation import FFMpegWriter 
 
-def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visualization", skeleton_type = None,save_gif_path = None):
+
+def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visualization",
+                                skeleton_type = None,
+                                save_mp4_path = None,
+                                show_axes = True,
+                                skeleton_color = 'b'):
     """
     Save a continuous motion sequence in 3D.
 
@@ -50,15 +55,24 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         (10, 12), (12, 13), (13, 14), (14, 15), (15, 16),
         (10, 17), (17, 18), (18, 19), (19, 20), (20, 21)
     ]
+
     if skeleton_type == 'h36m':
         connections = h36m_connections
+        motion_sequence = np.stack((motion_sequence[:, :, 2],
+                                       motion_sequence[:, :, 0],
+                                       motion_sequence[:, :, 1]), axis=2)
     elif skeleton_type == 'amass':
         connections = amass_connections
     elif skeleton_type == 'incomplete_h36m':
         connections = incomplete_h36m_connections
+        motion_sequence = np.stack((motion_sequence[:, :, 2],
+                                       motion_sequence[:, :, 0],
+                                       motion_sequence[:, :, 1]), axis=2)   
 
     fig = plt.figure(figsize=(19, 10))
     ax = fig.add_subplot(111, projection='3d')
+
+    ax.view_init(elev=20, azim=55)  # Adjust elevation and azimuth as needed
 
     def update(frame_idx):
         ax.clear()
@@ -70,7 +84,8 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         ax.set_zlabel("Z")
         ax.set_title(f"Frame {frame_idx}: {motion_sequence[frame_idx, 0]}")
         ax.grid(False)
-            # Optional: Remove axis panes (background planes)
+
+        # Optional: Remove axis panes (background planes)
         ax.xaxis.pane.fill = False
         ax.yaxis.pane.fill = False
         ax.zaxis.pane.fill = False
@@ -85,25 +100,24 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         ax.set_yticks([])
         ax.set_zticks([])
         joints = motion_sequence[frame_idx]
-        ax.view_init(elev=8.7, azim=-108.7)
 
         # Add artificial origin as the last joint
         joints_with_origin = np.vstack([joints, np.array([0, 0, 0])])
-        # ax.scatter(joints_with_origin[:, 0], joints_with_origin[:, 1], joints_with_origin[:, 2], c='r', marker='o')
+
         if skeleton_type is not None:
             for connection in connections:
                 joint1, joint2 = connection
                 ax.plot([joints_with_origin[joint1, 0], joints_with_origin[joint2, 0]],
-                        [-joints_with_origin[joint1, 2], -joints_with_origin[joint2, 2]],
-                        [joints_with_origin[joint1, 1], joints_with_origin[joint2, 1]], 'r', alpha=1)
+                        [joints_with_origin[joint1, 1], joints_with_origin[joint2, 1]],
+                        [joints_with_origin[joint1, 2], joints_with_origin[joint2, 2]], skeleton_color, alpha=1)
         else:
             for joint_idx, (x, y, z) in enumerate(joints):
                 ax.text(x, y, z, str(joint_idx), color='blue', fontsize=8)
 
     ani = animation.FuncAnimation(fig, update, frames=motion_sequence.shape[0], interval=100)
 
-    if save_gif_path:
-        ani.save(save_gif_path, writer=PillowWriter(fps=10))
+    if save_mp4_path:
+        ani.save(save_mp4_path, writer=FFMpegWriter(fps=25))
     else:
         while True:
             plt.show()
@@ -142,7 +156,8 @@ def preprocess(filename):
 def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, 
                                        title="Predicted vs Ground Truth Motion",
                                        skeleton_type=None,
-                                       save_gif_path=None):
+                                       save_mp4_path=None,
+                                       show_axes = True):
     """
     Visualize the predicted motion and ground truth in 3D for specific time steps, with skeleton connections.
 
@@ -219,6 +234,27 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         ax.set_ylabel("Y")
         ax.set_zlabel("Z")
         ax.set_title(f"Frame {frame_idx}")
+
+        if show_axes:
+            ax.grid(True)
+            ax.set_xticks(np.linspace(-1, 1, 5))
+            ax.set_yticks(np.linspace(-1, 1, 5))
+            ax.set_zticks(np.linspace(-1, 1, 5))
+        else:
+            ax.grid(False)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+
+            # Remove axis panes (background planes)
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+
+            # Optional: Make pane edges transparent
+            ax.xaxis.pane.set_edgecolor('w')
+            ax.yaxis.pane.set_edgecolor('w')
+            ax.zaxis.pane.set_edgecolor('w')
         
         predicted_joints = predicted_positions[frame_idx]
         # Add artificial origin as the last joint
@@ -248,8 +284,8 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
 
     ani = animation.FuncAnimation(fig, update, frames=predicted_positions.shape[0], interval=100)
 
-    if save_gif_path:
-        ani.save(save_gif_path, writer=PillowWriter(fps=10))
+    if save_mp4_path:
+        ani.save(save_mp4_path, writer=FFMpegWriter(fps=25))
     else:
         while True:
             plt.show()
