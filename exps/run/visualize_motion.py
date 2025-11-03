@@ -10,6 +10,39 @@ from utils.misc import expmap2rotmat_torch, find_indices_256, find_indices_srnn,
 import matplotlib.animation as animation
 from matplotlib.animation import FFMpegWriter 
 
+# Define the connections between joints (skeleton structure)
+amass_connections = [
+    # Spine/Torso/Head
+    (0, 3), (3,6), (6, 9), (9, 12),
+    #Left leg
+    (0, 1), (1, 4), (4, 7),
+    # Right leg
+    (0, 2), (2, 5), (5, 8),
+    # Left arm
+    (6, 10), (10, 13), (13, 15), (15, 17),
+    # Right arm
+    (6, 11), (11, 14), (14, 16), (16, 18)
+]
+
+h36m_connections = [
+    (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
+    (0, 6), (6, 7), (7, 8), (8, 9), (9, 10),
+    (11, 12), (12, 13), (13, 14), (14, 15),
+    (16, 17), (17, 18), (18, 19), (19, 20), 
+    (20, 21), (21, 22), (22, 23),
+    (24, 25), (25, 26), (26, 27), (27, 28), 
+    (28, 29), (29, 30), (30, 31)
+]
+
+incomplete_h36m_connections = [
+    (-1, 0), (-1, 4), (-1, 8),
+    (0, 1), (1, 2), (2, 3), 
+    (4, 5), (5, 6), (6, 7),
+    (8, 9), (9, 10), (10, 11), (14, 15),
+    (10, 12), (12, 13), (13, 14), (14, 15), (15, 16),
+    (10, 17), (17, 18), (18, 19), (19, 20), (20, 21)
+]
+
 
 def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visualization",
                                 skeleton_type = None,
@@ -23,38 +56,6 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
     :param title: Title of the plot.
     """
     axes_limit = 2
-    # Define the connections between joints (skeleton structure)
-    amass_connections = [
-        # Spine/Torso/Head
-        (0, 3), (3,6), (6, 9), (9, 12),
-        #Left leg
-        (0, 1), (1, 4), (4, 7),
-        # Right leg
-        (0, 2), (2, 5), (5, 8),
-        # Left arm
-        (6, 10), (10, 13), (13, 15), (15, 17),
-        # Right arm
-        (6, 11), (11, 14), (14, 16), (16, 18)
-    ]
-
-    h36m_connections = [
-        (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
-        (0, 6), (6, 7), (7, 8), (8, 9), (9, 10),
-        (11, 12), (12, 13), (13, 14), (14, 15),
-        (16, 17), (17, 18), (18, 19), (19, 20), 
-        (20, 21), (21, 22), (22, 23),
-        (24, 25), (25, 26), (26, 27), (27, 28), 
-        (28, 29), (29, 30), (30, 31)
-    ]
-
-    incomplete_h36m_connections = [
-        (-1, 0), (-1, 4), (-1, 8),
-        (0, 1), (1, 2), (2, 3), 
-        (4, 5), (5, 6), (6, 7),
-        (8, 9), (9, 10), (10, 11), (14, 15),
-        (10, 12), (12, 13), (13, 14), (14, 15), (15, 16),
-        (10, 17), (17, 18), (18, 19), (19, 20), (20, 21)
-    ]
 
     if skeleton_type == 'h36m':
         connections = h36m_connections
@@ -122,7 +123,6 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         while True:
             plt.show()
 
-def preprocess(filename):
     info = open(filename, 'r').readlines()
     pose_info = []
     for line in info:
@@ -166,38 +166,6 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
     :param time_steps: List of time steps to visualize (e.g., [2, 10, 14, 25])
     :param title: Title of the plot
     """
-    # Define the connections between joints (skeleton structure)
-    amass_connections = [
-        # Spine/Torso/Head
-        (0, 3), (3,6), (6, 9), (9, 12),
-        #Left leg
-        (0, 1), (1, 4), (4, 7),
-        # Right leg
-        (0, 2), (2, 5), (5, 8),
-        # Left arm
-        (6, 10), (10, 13), (13, 15), (15, 17),
-        # Right arm
-        (6, 11), (11, 14), (14, 16), (16, 18)
-    ]
-
-    h36m_connections = [
-        (0, 1), (1, 2), (2, 3), (3, 4), (4, 5),
-        (0, 6), (6, 7), (7, 8), (8, 9), (9, 10),
-        (11, 12), (12, 13), (13, 14), (14, 15),
-        (16, 17), (17, 18), (18, 19), (19, 20), 
-        (20, 21), (21, 22), (22, 23),
-        (24, 25), (25, 26), (26, 27), (27, 28), 
-        (28, 29), (29, 30), (30, 31)
-    ]
-
-    incomplete_h36m_connections = [
-        (-1, 0), (-1, 4), (-1, 8),
-        (0, 1), (1, 2), (2, 3), 
-        (4, 5), (5, 6), (6, 7),
-        (8, 9), (9, 10), (10, 11), (14, 15),
-        (10, 12), (12, 13), (13, 14), (14, 15), (15, 16),
-        (10, 17), (17, 18), (18, 19), (19, 20), (20, 21)
-    ]
 
     if skeleton_type == 'h36m':
         connections = h36m_connections
@@ -290,12 +258,57 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         while True:
             plt.show()
         
+def visualize_input_and_output(self, gif_path="input_output.gif"):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.view_init(elev=20, azim=55)
 
 
+        input_motion = self.observed_motion
+        output_motion = self.predicted_motion
 
-# filename = '{0}/{1}/{2}_{3}.txt'.format(config.h36m_anno_dir, "S1", "walking", 1)
-# motion_sequence = preprocess(filename)
-# print("Motion sequence shape: ", motion_sequence.shape)
-# amass_motion_sequence = map_h36m_to_amass(motion_sequence)
-# print("AMASS motion sequence shape: ", amass_motion_sequence.shape)
-# visualize_continuous_motion(amass_motion_sequence/1000., title="Continuous Motion Visualization")
+        total_frames = len(input_motion) + len(output_motion)
+
+        def update(frame_idx):
+            ax.clear()
+            ax.set_xlim([-1, 1])
+            ax.set_ylim([-1, 1])
+            ax.set_zlim([-1, 1])
+            ax.set_xlabel("X")
+            ax.set_ylabel("Y")
+            ax.set_zlabel("Z")
+            if frame_idx < len(input_motion):
+                ax.set_title(f"Input Motion - Frame: {frame_idx}")
+                joints = input_motion[frame_idx]
+                color = 'r'
+                for connection in connections:
+                    joint1, joint2 = connection
+                    ax.plot([joints[joint1, 0], joints[joint2, 0]],
+                            [joints[joint1, 2], joints[joint2, 2]],
+                            [joints[joint1, 1], joints[joint2, 1]], color, alpha=0.7)
+            else:
+                out_idx = frame_idx - len(input_motion)
+                ax.set_title(f"Predicted vs Ground Truth - Frame: {out_idx}")
+                # Plot predicted output (e.g., green)
+                joints_pred = output_motion[out_idx]
+                for connection in connections:
+                    joint1, joint2 = connection
+                    ax.plot([joints_pred[joint1, 0], joints_pred[joint2, 0]],
+                            [joints_pred[joint1, 2], joints_pred[joint2, 2]],
+                            [joints_pred[joint1, 1], joints_pred[joint2, 1]], 'g', alpha=0.7, label='Prediction' if connection == connections[0] else "")
+                # Plot ground truth (e.g., blue)
+                joints_gt = ground_truth[out_idx]
+                for connection in connections:
+                    joint1, joint2 = connection
+                    ax.plot([joints_gt[joint1, 0], joints_gt[joint2, 0]],
+                            [joints_gt[joint1, 2], joints_gt[joint2, 2]],
+                            [joints_gt[joint1, 1], joints_gt[joint2, 1]], 'b', alpha=0.7, label='Ground Truth' if connection == connections[0] else "")
+                # Add legend only once
+                handles, labels = ax.get_legend_handles_labels()
+                if not handles:
+                    ax.legend(["Prediction", "Ground Truth"])
+
+        ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=100)
+        ani.save(gif_path, writer='pillow', fps=10)
+        plt.close(fig)
+        print(f"Saved GIF to {gif_path}")
