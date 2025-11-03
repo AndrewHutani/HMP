@@ -123,35 +123,6 @@ def visualize_continuous_motion(motion_sequence, title="Continuous Motion Visual
         while True:
             plt.show()
 
-    info = open(filename, 'r').readlines()
-    pose_info = []
-    for line in info:
-        line = line.strip().split(',')
-        if len(line) > 0:
-            pose_info.append(np.array([float(x) for x in line]))
-    pose_info = np.array(pose_info)
-    pose_info = pose_info.reshape(-1, 33, 3)  # [num_frames, num_joints, 3]
-    
-    # Convert exponential maps to rotation matrices
-    pose_info_flat = pose_info.reshape(-1, 3)  # Flatten for conversion
-    rotation_matrices = expmap2rotmat_torch(torch.tensor(pose_info_flat).float())
-    
-    rotation_matrices = rotation_matrices.reshape(-1, 33, 3, 3)
-    root_rotation = rotation_matrices[:, 0, :, :].clone().detach()
-    print("Root rotation shape: ", root_rotation.shape)
-
-    joint_positions = rotmat2xyz_torch(rotation_matrices[:, 1:, :, :])  # Convert to XYZ format
-    print("Joint positions shape: ", joint_positions.shape)
-
-    root_translation = pose_info[:, 0, :]
-
-
-    rotated_joint_positions = torch.matmul(root_rotation.unsqueeze(1), joint_positions.unsqueeze(-1))
-    rotated_joint_positions = rotated_joint_positions.squeeze(-1)  # Remove the last dimension
-    print("Root position unsqueeze shape: ", torch.tensor(root_translation).float().unsqueeze(1).shape)
-    rotated_joint_positions += torch.tensor(root_translation).float().unsqueeze(1)
-
-    return joint_positions
 
 def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positions, 
                                        title="Predicted vs Ground Truth Motion",
@@ -258,57 +229,158 @@ def visualize_motion_with_ground_truth(predicted_positions, ground_truth_positio
         while True:
             plt.show()
         
-def visualize_input_and_output(self, gif_path="input_output.gif"):
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.view_init(elev=20, azim=55)
+def visualize_input_and_output_gcnext(input_positions, predicted_positions, ground_truth_positions,
+                                skeleton_type=None,
+                                save_mp4_path=None):
+    
+    if skeleton_type == 'h36m':
+        connections = h36m_connections
+        input_positions = np.stack((input_positions[:, :, 2],
+                                    input_positions[:, :, 0],
+                                    input_positions[:, :, 1]), axis=2)
+        predicted_positions = np.stack((predicted_positions[:, :, 2],
+                                       predicted_positions[:, :, 0],
+                                       predicted_positions[:, :, 1]), axis=2)
+        ground_truth_positions = np.stack((ground_truth_positions[:, :, 2],
+                                           ground_truth_positions[:, :, 0],
+                                           ground_truth_positions[:, :, 1]), axis=2)
+    elif skeleton_type == 'amass':
+        connections = amass_connections
+    elif skeleton_type == 'incomplete_h36m':
+        connections = incomplete_h36m_connections
+        input_positions = np.stack((input_positions[:, :, 2],
+                                    input_positions[:, :, 0],
+                                    input_positions[:, :, 1]), axis=2)
+        predicted_positions = np.stack((predicted_positions[:, :, 2],
+                                       predicted_positions[:, :, 0],
+                                       predicted_positions[:, :, 1]), axis=2)
+        ground_truth_positions = np.stack((ground_truth_positions[:, :, 2],
+                                           ground_truth_positions[:, :, 0],
+                                           ground_truth_positions[:, :, 1]), axis=2)
+        
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(elev=20, azim=55)
 
+    total_frames = len(input_positions) + len(predicted_positions)
 
-        input_motion = self.observed_motion
-        output_motion = self.predicted_motion
+    def update(frame_idx):
+        ax.clear()
+        ax.set_xlim([-1, 1])
+        ax.set_ylim([-1, 1])
+        ax.set_zlim([-1, 1])
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
 
-        total_frames = len(input_motion) + len(output_motion)
+        if frame_idx < len(input_positions):
+            ax.set_title(f"Input Motion - Frame: {frame_idx}")
+            joints = input_positions[frame_idx]
+            # Add artificial origin as the last joint
+            joints = np.vstack([joints, np.array([0, 0, 0])])
+            for connection in connections:
+                joint1, joint2 = connection
+                ax.plot([joints[joint1, 0], joints[joint2, 0]],
+                        [joints[joint1, 1], joints[joint2, 1]],
+                        [joints[joint1, 2], joints[joint2, 2]], 'g', alpha=0.7)
+        else:
+            out_idx = frame_idx - len(input_positions)
+            ax.set_title(f"Predicted vs Ground Truth - Frame: {out_idx}")
+            joints_pred = predicted_positions[out_idx]
+            # Add artificial origin as the last joint
+            joints_pred = np.vstack([joints_pred, np.array([0, 0, 0])])
+            for connection in connections:
+                joint1, joint2 = connection
+                ax.plot([joints_pred[joint1, 0], joints_pred[joint2, 0]],
+                        [joints_pred[joint1, 1], joints_pred[joint2, 1]],
+                        [joints_pred[joint1, 2], joints_pred[joint2, 2]], 'b', alpha=0.7, label='Prediction' if connection == connections[0] else "")
+            # Plot ground truth
+            joints_gt = ground_truth_positions[out_idx]
+            # Add artificial origin as the last joint
+            joints_gt = np.vstack([joints_gt, np.array([0, 0, 0])])
+            for connection in connections:
+                joint1, joint2 = connection
+                ax.plot([joints_gt[joint1, 0], joints_gt[joint2, 0]],
+                        [joints_gt[joint1, 1], joints_gt[joint2, 1]],
+                        [joints_gt[joint1, 2], joints_gt[joint2, 2]], 'r', alpha=0.7, label='Ground Truth' if connection == connections[0] else "")
+            
+            ax.legend()
 
-        def update(frame_idx):
-            ax.clear()
-            ax.set_xlim([-1, 1])
-            ax.set_ylim([-1, 1])
-            ax.set_zlim([-1, 1])
-            ax.set_xlabel("X")
-            ax.set_ylabel("Y")
-            ax.set_zlabel("Z")
-            if frame_idx < len(input_motion):
-                ax.set_title(f"Input Motion - Frame: {frame_idx}")
-                joints = input_motion[frame_idx]
-                color = 'r'
-                for connection in connections:
-                    joint1, joint2 = connection
-                    ax.plot([joints[joint1, 0], joints[joint2, 0]],
-                            [joints[joint1, 2], joints[joint2, 2]],
-                            [joints[joint1, 1], joints[joint2, 1]], color, alpha=0.7)
-            else:
-                out_idx = frame_idx - len(input_motion)
-                ax.set_title(f"Predicted vs Ground Truth - Frame: {out_idx}")
-                # Plot predicted output (e.g., green)
-                joints_pred = output_motion[out_idx]
-                for connection in connections:
-                    joint1, joint2 = connection
-                    ax.plot([joints_pred[joint1, 0], joints_pred[joint2, 0]],
-                            [joints_pred[joint1, 2], joints_pred[joint2, 2]],
-                            [joints_pred[joint1, 1], joints_pred[joint2, 1]], 'g', alpha=0.7, label='Prediction' if connection == connections[0] else "")
-                # Plot ground truth (e.g., blue)
-                joints_gt = ground_truth[out_idx]
-                for connection in connections:
-                    joint1, joint2 = connection
-                    ax.plot([joints_gt[joint1, 0], joints_gt[joint2, 0]],
-                            [joints_gt[joint1, 2], joints_gt[joint2, 2]],
-                            [joints_gt[joint1, 1], joints_gt[joint2, 1]], 'b', alpha=0.7, label='Ground Truth' if connection == connections[0] else "")
-                # Add legend only once
-                handles, labels = ax.get_legend_handles_labels()
-                if not handles:
-                    ax.legend(["Prediction", "Ground Truth"])
+    ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=100)
 
-        ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=100)
-        ani.save(gif_path, writer='pillow', fps=10)
-        plt.close(fig)
-        print(f"Saved GIF to {gif_path}")
+    if save_mp4_path:
+        ani.save(save_mp4_path, writer=FFMpegWriter(fps=25))
+    else:
+        while True:
+            plt.show()
+    plt.close()
+
+def visualize_input_and_output_physmop(ground_truth_positions, predicted_positions, num_input_frames,
+                                skeleton_type=None,
+                                save_mp4_path=None):
+    """
+    Biggest difference is that the the physmop model concatenates the input and output together
+    """
+
+    
+    if skeleton_type == 'amass':
+        connections = amass_connections
+
+        
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(elev=20, azim=55)
+
+    total_frames = predicted_positions
+
+    def update(frame_idx):
+        ax.clear()
+        ax.set_xlim([-1, 1])
+        ax.set_ylim([-1, 1])
+        ax.set_zlim([-1, 1])
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+
+        if frame_idx < len(input_positions):
+            ax.set_title(f"Input Motion - Frame: {frame_idx}")
+            joints = input_positions[frame_idx]
+            # Add artificial origin as the last joint
+            joints = np.vstack([joints, np.array([0, 0, 0])])
+            for connection in connections:
+                joint1, joint2 = connection
+                ax.plot([joints[joint1, 0], joints[joint2, 0]],
+                        [joints[joint1, 1], joints[joint2, 1]],
+                        [joints[joint1, 2], joints[joint2, 2]], 'g', alpha=0.7)
+        else:
+            out_idx = frame_idx - len(input_positions)
+            ax.set_title(f"Predicted vs Ground Truth - Frame: {out_idx}")
+            joints_pred = predicted_positions[out_idx]
+            # Add artificial origin as the last joint
+            joints_pred = np.vstack([joints_pred, np.array([0, 0, 0])])
+            for connection in connections:
+                joint1, joint2 = connection
+                ax.plot([joints_pred[joint1, 0], joints_pred[joint2, 0]],
+                        [joints_pred[joint1, 1], joints_pred[joint2, 1]],
+                        [joints_pred[joint1, 2], joints_pred[joint2, 2]], 'b', alpha=0.7, label='Prediction' if connection == connections[0] else "")
+            # Plot ground truth
+            joints_gt = ground_truth_positions[out_idx]
+            # Add artificial origin as the last joint
+            joints_gt = np.vstack([joints_gt, np.array([0, 0, 0])])
+            for connection in connections:
+                joint1, joint2 = connection
+                ax.plot([joints_gt[joint1, 0], joints_gt[joint2, 0]],
+                        [joints_gt[joint1, 1], joints_gt[joint2, 1]],
+                        [joints_gt[joint1, 2], joints_gt[joint2, 2]], 'r', alpha=0.7, label='Ground Truth' if connection == connections[0] else "")
+            
+            ax.legend()
+
+    ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=100)
+
+    if save_mp4_path:
+        ani.save(save_mp4_path, writer=FFMpegWriter(fps=25))
+    else:
+        while True:
+            plt.show()
+    plt.close()
+
