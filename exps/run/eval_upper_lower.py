@@ -1,3 +1,4 @@
+import csv
 import re
 from matplotlib.lines import Line2D
 import numpy as np
@@ -95,7 +96,9 @@ def parse_physmop_data(filename, body_part):
     time horizons are: 80ms, 160ms, 320ms, 400ms, 560ms, 720ms, 880ms, 1000ms
     we want: 80ms, 400ms, 560ms, 1000ms -> indices 0, 3, 4, 7
     '''
-    data = []
+    mean_data = []
+    std_data = []
+    used_indices = [0, 3, 4, 7]
     found_section = False
     header = f"Averaged MPJPE ({body_part}) for each observation length and each selected timestep:"
     with open(filename, "r") as f:
@@ -107,10 +110,19 @@ def parse_physmop_data(filename, body_part):
                 if line.startswith("Obs"):
                     arr = re.findall(r"\[([^\]]+)\]", line)
                     if arr:
-                        data.append([float(x) for x in arr[0].split()])
+                        mean_data.append([float(x) for x in arr[0].split()])
+                elif line.startswith("Std"):
+                    arr = re.findall(r"\[([^\]]+)\]", line)
+                    if arr:
+                        std_data.append([float(x) for x in arr[0].split()])
                 elif line.strip() == "":
                     break  # End of section
-    return np.array(data)
+    mean_data = np.array(mean_data)
+    std_data = np.array(std_data)
+    if mean_data.shape[1] == 4:
+        return mean_data, std_data
+    else:
+        return np.array(mean_data)[:, used_indices], np.array(std_data)[:, used_indices]
 
 # Parse the data
 def parse_gcn_data(filename, body_part):
@@ -171,32 +183,70 @@ def parse_percentile_data_physmop(filename, body_part, percentile):
                     break  # End of section
     return np.array(data)
 
-upper_data = parse_physmop_data("physmop_data_mpjpe_log.txt", "upper body")
-lower_data = parse_physmop_data("physmop_data_mpjpe_log.txt", "lower body")
-upper_physics = parse_physmop_data("physmop_physics_mpjpe_log.txt", "upper body")
-lower_physics = parse_physmop_data("physmop_physics_mpjpe_log.txt", "lower body")
-upper_fusion = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "upper body")
-lower_fusion = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "lower body")
-upper_data_25 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "upper body", "25th")
-upper_data_75 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "upper body", "75th")
-lower_data_25 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "lower body", "25th")
-lower_data_75 = parse_percentile_data_physmop("physmop_data_mpjpe_log.txt", "lower body", "75th")
+def compute_confidence_interval(mean, std, n, confidence=0.95):
+    """
+    mean: array of means
+    std: array of standard deviations
+    n: sample size (number of runs)
+    confidence: confidence level (default 0.95)
+    Returns lower and upper bounds for the confidence interval
+    """
+    from scipy.stats import norm
+    z = norm.ppf(1 - (1 - confidence) / 2)  # z-score for 95% CI ≈ 1.96
+    error = z * std / np.sqrt(n)
+    return mean, error
+
+def export_upper_lower_mean_error_csv(
+    upper_mean, upper_error, lower_mean, lower_error, filename,
+    frame_indices=None, time_labels=None
+):
+    """
+    Exports both upper and lower body mean±error to a CSV file.
+    Each row: Number of input frames, upper body mean±error at 80ms, ..., lower body mean±error at 1000ms
+    """
+    num_frames = upper_mean.shape[0]
+    num_timesteps = upper_mean.shape[1]
+    if frame_indices is None:
+        frame_indices = list(range(num_frames))
+    if time_labels is None:
+        time_labels = ["80ms", "400ms", "560ms", "1000ms"]
+
+    with open(filename, "w", newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        header = (
+            ["Number of input frames"] +
+            [f"upper body mean\pmerror at {label}" for label in time_labels] +
+            [f"lower body mean\pmerror at {label}" for label in time_labels]
+        )
+        writer.writerow(header)
+        for idx in frame_indices:
+            row = [idx + 1]
+            # Upper body
+            for t in range(num_timesteps):
+                val = f"{upper_mean[idx, t]:.2f}\pm{upper_error[idx, t]:.2f}"
+                row.append(val)
+            # Lower body
+            for t in range(num_timesteps):
+                val = f"{lower_mean[idx, t]:.2f}\pm{lower_error[idx, t]:.2f}"
+                row.append(val)
+            writer.writerow(row)
+
+upper_data_mean, upper_data_std = parse_physmop_data("physmop_data_mpjpe_log.txt", "upper body")
+lower_data_mean, lower_data_std = parse_physmop_data("physmop_data_mpjpe_log.txt", "lower body")
+upper_physics_mean, upper_physics_std = parse_physmop_data("physmop_physics_mpjpe_log.txt", "upper body")
+lower_physics_mean, lower_physics_std = parse_physmop_data("physmop_physics_mpjpe_log.txt", "lower body")
+upper_fusion_mean, upper_fusion_std = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "upper body")
+lower_fusion_mean, lower_fusion_std = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "lower body")
 
 upper_gcn_avg, upper_gcn_std = parse_gcn_data("mpjpe_log.txt", "upper body")
 lower_gcn_avg, lower_gcn_std = parse_gcn_data("mpjpe_log.txt", "lower body")
-upper_25 = parse_percentile_data("mpjpe_log.txt", "upper body", "25th")
-upper_75 = parse_percentile_data("mpjpe_log.txt", "upper body", "75th")
-lower_25 = parse_percentile_data("mpjpe_log.txt", "lower body", "25th")
-lower_75 = parse_percentile_data("mpjpe_log.txt", "lower body", "75th")
 
-upper_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "upper body")
-lower_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "lower body")
+# upper_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "upper body")
+# lower_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "lower body")
 
-upper_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "upper body")
-lower_gcn_on_amass = parse_physmop_data("gcnext_on_amass.txt", "lower body")
+upper_gcn_on_amass_mean, upper_gcn_on_amass_std = parse_physmop_data("gcnext_on_amass.txt", "upper body")
+lower_gcn_on_amass_mean, lower_gcn_on_amass_std = parse_physmop_data("gcnext_on_amass.txt", "lower body")
 
-
-print(lower_data_25.shape)  # (50, 8)
 # Aggregate by group
 def group_average(actions, action_data):
     group = []
@@ -233,25 +283,50 @@ def find_diminishing_returns_percentage(data, improvement_threshold=2.0):
     return diminishing_points
 
 
-upper_data = upper_data[:, [0, 3, 4, 7]]
-lower_data = lower_data[:, [0, 3, 4, 7]]
-upper_physics = upper_physics[:, [0, 3, 4, 7]]
-lower_physics = lower_physics[:, [0, 3, 4, 7]]
-upper_fusion = upper_fusion[:, [0, 3, 4, 7]]
-lower_fusion = lower_fusion[:, [0, 3, 4, 7]]
-upper_data_longer = upper_data_longer[:, [0, 3, 4, 7]]
-lower_data_longer = lower_data_longer[:, [0, 3, 4, 7]]
 
 upper_gcn = group_average(actions, upper_gcn_avg)
 upper_gcn_std = group_average(actions, upper_gcn_std)
 lower_gcn = group_average(actions, lower_gcn_avg)
 lower_gcn_std = group_average(actions, lower_gcn_std)
-upper_25 = group_average(actions, upper_25)
-upper_75 = group_average(actions, upper_75)
-lower_25 = group_average(actions, lower_25)
-lower_75 = group_average(actions, lower_75)
 
+upper_gcn_mean, upper_gcn_error = compute_confidence_interval(upper_gcn, upper_gcn_std, 3840)
+lower_gcn_mean, lower_gcn_error = compute_confidence_interval(lower_gcn, lower_gcn_std, 3840)
+export_upper_lower_mean_error_csv(
+    upper_gcn_mean, upper_gcn_error, lower_gcn_mean, lower_gcn_error,
+    "gcnext_upper_lower_mean_error.csv",
+    frame_indices=[0,2,4,9,14,19,24,29,34,39,44,49],
+    time_labels=["80ms", "400ms", "560ms", "1000ms"]
+)
+print(upper_data_mean.shape, lower_data_mean.shape)
 
+upper_physics_mean, upper_physics_error = compute_confidence_interval(upper_physics_mean, upper_physics_std, 15467)
+lower_physics_mean, lower_physics_error = compute_confidence_interval(lower_physics_mean, lower_physics_std, 15467)
+export_upper_lower_mean_error_csv(
+    upper_physics_mean, upper_physics_error, lower_physics_mean, lower_physics_error,
+    "physmop_physics_upper_lower_mean_error.csv",   
+    frame_indices=[0,1,2,3,4,9,14,19, 24],
+    time_labels=["80ms", "400ms", "560ms", "1000ms"]
+)
+
+upper_data_mean, upper_data_error = compute_confidence_interval(upper_data_mean, upper_data_std, 15467)
+lower_data_mean, lower_data_error = compute_confidence_interval(lower_data_mean, lower_data_std, 15467)
+print(upper_data_mean.shape, lower_data_mean.shape)
+
+export_upper_lower_mean_error_csv(
+    upper_data_mean, upper_data_error, lower_data_mean, lower_data_error,
+    "physmop_data_upper_lower_mean_error.csv",
+    frame_indices=[0,1,2,3,4,9,14,19, 24],
+    time_labels=["80ms", "400ms", "560ms", "1000ms"]
+)
+
+upper_gcn_on_amass_mean, upper_gcn_on_amass_error = compute_confidence_interval(upper_gcn_on_amass_mean, upper_gcn_on_amass_std, 9203)
+lower_gcn_on_amass_mean, lower_gcn_on_amass_error = compute_confidence_interval(lower_gcn_on_amass_mean, lower_gcn_on_amass_std, 9203)
+export_upper_lower_mean_error_csv(
+    upper_gcn_on_amass_mean, upper_gcn_on_amass_error, lower_gcn_on_amass_mean, lower_gcn_on_amass_error,
+    "gcnext_on_amass_upper_lower_mean_error.csv",
+    frame_indices=[0,2,4,9,14,19,24,29,34,39,44,49],
+    time_labels=["80ms", "400ms", "560ms", "1000ms"]
+)
 
 upper_diminishing_pct = find_diminishing_returns_percentage(upper_gcn, improvement_threshold=1.0)
 lower_diminishing_pct = find_diminishing_returns_percentage(lower_gcn, improvement_threshold=1.0)
@@ -262,7 +337,7 @@ print("Lower body diminishing returns (1% threshold) at frames:", lower_diminish
 
 
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
-x_vals = np.arange(1, len(upper_data) + 1)
+x_vals = np.arange(1, len(upper_data_mean) + 1)
 
 all_arrays = [
     upper_data, lower_data,
