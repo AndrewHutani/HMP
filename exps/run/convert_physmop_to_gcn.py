@@ -15,7 +15,30 @@ from prediction_times import prediction_times
 import time
 import numpy as np
 
-physmop_to_gcn = [2, 5, 8, 8, 1, 4, 7, 7, 3, 6, 9, 12, 13, 15, 17, 17, 17, 14, 16, 18, 18, 18]
+physmop_to_gcn = [
+    1, # LKNEE 0
+    4, # LANKLE 1
+    7, # LFOOT 2
+    7, # LTOE 3
+    2, # RKNEE 4
+    5, # RANKLE 5
+    8, # RFOOT 6
+    8, # RTOE 7
+    3, # Spine 8
+    9, # Neck 9
+    12, # Nose 10
+    12, # Head 11
+    14, # RShoulder 12
+    16, # RElbow 13
+    18, # Rwrist 14
+    18, # RHand 15
+    18, # RThumb 16
+    13, # LShoulder 17
+    15, # LElbow 18
+    17, # Lwrist 19
+    17, # LHand 20
+    17, # LThumb 21
+]
 
 ds = "AMASS" 
 if __name__ == "__main__":
@@ -68,8 +91,8 @@ if __name__ == "__main__":
                     frames = gcn_gt_J.shape[0]
                     joints = gcn_gt_J.shape[1]
                     gcn_gt_J_flat = gcn_gt_J.reshape(frames, joints * 3)  # assuming batch size 1
-                    print(f"GCN Ground Truth Joints shape: {gcn_gt_J.shape}")
-                    visualize_continuous_motion(gcn_gt_J, "GCN Ground Truth Joints", skeleton_type='incomplete_h36m')
+                    # print(f"GCN Ground Truth Joints shape: {gcn_gt_J.shape}")
+                    # visualize_continuous_motion(gcn_gt_J, "GCN Ground Truth Joints")
                     all_gcn_gt_J_flat.append(gcn_gt_J_flat)
 
                 # Save all GCN ground truth joints to a file
