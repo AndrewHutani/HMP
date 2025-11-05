@@ -160,7 +160,6 @@ if __name__ == "__main__":
                     else:
                         max_start_idx = batch['q'].shape[1] - total_len
                         max_start_idx = max(0, max_start_idx)
-                    print(f"Downsample rate: {downsample_rate:.2f}, max_start_idx: {max_start_idx}")
                     stride = 1
                     for start_idx in range(0, max_start_idx + 1, stride):
                         processed_batch = {}
