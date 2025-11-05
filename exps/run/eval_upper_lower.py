@@ -12,18 +12,21 @@ static_actions = ["sitting", "sittingdown", "posing"]
 combination_actions =["Discussion", "Directions", "Phoning", "Eating", "Waiting"]
 dynamic_actions = ["walking", "walkingtogether", "walkingdog", "greeting"]
 
-def plot_and_save(upper_data, lower_data, model_name, branch, x_vals, colors, y_limits = None, fps = 25, time_unit="ms"):
-    plt.figure(figsize=(10,6))
+fontsize = 16
+
+def plot_and_save(upper_data, lower_data, 
+                  title, 
+                  model_name, branch,
+                  x_vals, colors, y_limits = None, fps = 25, time_unit="ms"):
+    plt.figure(figsize=(10,7))
     for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
         plt.plot(x_vals, upper_data[:, i], label=f"{label} (Upper)", color=colors[i], linestyle='-')
         plt.plot(x_vals, lower_data[:, i], label=f"{label} (Lower)", color=colors[i], linestyle='--')
         # plt.plot(lower_physics[:, i], label=f"{label} (Physics)", color=colors[i], linestyle='-.')
-    plt.xlabel("Number of Observed Frames")
-    plt.ylabel("Absolute MPJPE (mm)")
-    if model_name == "GCNext":
-        plt.title(f"MPJPE for the {model_name} model vs. Observed Frames")
-    else:
-        plt.title(f"MPJPE for the {branch} branch of the {model_name} model vs. Observed Frames")
+    plt.xlabel("Number of Observed Frames", fontsize=fontsize)
+    plt.ylabel("Absolute MPJPE (mm)", fontsize=fontsize)
+    plt.tick_params(axis='both', labelsize=fontsize-4)
+    plt.title(title, fontsize=fontsize)
     
     # add secondary x-axis for time
     ax = plt.gca()
@@ -32,59 +35,32 @@ def plot_and_save(upper_data, lower_data, model_name, branch, x_vals, colors, y_
     inverse = lambda seconds: seconds * float(fps)  # seconds -> frame index
 
     secax = ax.secondary_xaxis('bottom', functions=(forward, inverse))
-    secax.spines['bottom'].set_position(('outward', 36))
+    secax.spines['bottom'].set_position(('outward', 60))
 
     # Align secondary ticks exactly with primary ticks (prevents horizontal offset)
     prim_ticks = ax.get_xticks()
     sec_ticks = forward(np.asarray(prim_ticks))
     secax.set_xticks(sec_ticks)
+    secax.tick_params(axis='x', labelsize=fontsize-4)
     # Ensure secondary axis covers the exact transformed visible range of the primary axis
     secax.set_xlim(forward(ax.get_xlim()[0]), forward(ax.get_xlim()[1]))
 
     if time_unit == 'ms':
-        secax.set_xlabel(f"Time (ms)")
+        secax.set_xlabel(f"Observed Time Span (ms)", fontsize=fontsize)
         # show ticks in milliseconds
         secax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, pos: f"{x*1000:.0f}"))
     else:
-        secax.set_xlabel(f"Time (s)")
+        secax.set_xlabel(f"Observed Time Span (s)", fontsize=fontsize)
         secax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, pos: f"{x:.2f}"))
 
     fig = plt.gcf()
 
-    # First legend
-    first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
-    second_line = Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms')
-    third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms')
-    fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
-
-    # Second legend
-    line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Upper")
-    line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Lower")
-
-
-    # Combine all handles and labels into one legend
-    all_handles = [
-        first_line, second_line, third_line, fourth_line,  # Timesteps/colors
-        line_solid, line_dashed,                           # Line types
-    ]
-    all_labels = [
-        '80ms', '400ms', '560ms', '1000ms',               # Timesteps/colors
-        'Upper', 'Lower',                                 # Line types
-    ]
-
-    plt.legend(
-        handles=all_handles,
-        labels=all_labels,
-        loc='upper right',
-        bbox_to_anchor=(1.2, 1),
-        title='Prediction horizon'
-    )
     plt.grid(True)
     plt.tight_layout()
     plt.yscale('log')
     if y_limits is not None:
         plt.ylim(y_limits)
-    save_name = f"mpjpe_{model_name.lower()}_{branch.lower()}_upper_lower.png"
+    save_name = f"figures/mpjpe_{model_name.lower()}_{branch.lower()}_upper_lower.png"
     plt.savefig(save_name)
     plt.close()
 
@@ -238,8 +214,8 @@ lower_physics_mean, lower_physics_std = parse_physmop_data("physmop_physics_mpjp
 upper_fusion_mean, upper_fusion_std = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "upper body")
 lower_fusion_mean, lower_fusion_std = parse_physmop_data("physmop_fusion_mpjpe_log.txt", "lower body")
 
-upper_gcn_avg, upper_gcn_std = parse_gcn_data("mpjpe_log.txt", "upper body")
-lower_gcn_avg, lower_gcn_std = parse_gcn_data("mpjpe_log.txt", "lower body")
+upper_gcn_mean, upper_gcn_std = parse_gcn_data("mpjpe_log.txt", "upper body")
+lower_gcn_mean, lower_gcn_std = parse_gcn_data("mpjpe_log.txt", "lower body")
 
 # upper_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "upper body")
 # lower_data_longer = parse_physmop_data("physmop_data_longer_mpjpe_log.txt", "lower body")
@@ -284,13 +260,13 @@ def find_diminishing_returns_percentage(data, improvement_threshold=2.0):
 
 
 
-upper_gcn = group_average(actions, upper_gcn_avg)
+upper_gcn_mean = group_average(actions, upper_gcn_mean)
 upper_gcn_std = group_average(actions, upper_gcn_std)
-lower_gcn = group_average(actions, lower_gcn_avg)
+lower_gcn_mean = group_average(actions, lower_gcn_mean)
 lower_gcn_std = group_average(actions, lower_gcn_std)
 
-upper_gcn_mean, upper_gcn_error = compute_confidence_interval(upper_gcn, upper_gcn_std, 3840)
-lower_gcn_mean, lower_gcn_error = compute_confidence_interval(lower_gcn, lower_gcn_std, 3840)
+upper_gcn_mean, upper_gcn_error = compute_confidence_interval(upper_gcn_mean, upper_gcn_std, 3840)
+lower_gcn_mean, lower_gcn_error = compute_confidence_interval(lower_gcn_mean, lower_gcn_std, 3840)
 export_upper_lower_mean_error_csv(
     upper_gcn_mean, upper_gcn_error, lower_gcn_mean, lower_gcn_error,
     "gcnext_upper_lower_mean_error.csv",
@@ -328,8 +304,8 @@ export_upper_lower_mean_error_csv(
     time_labels=["80ms", "400ms", "560ms", "1000ms"]
 )
 
-upper_diminishing_pct = find_diminishing_returns_percentage(upper_gcn, improvement_threshold=1.0)
-lower_diminishing_pct = find_diminishing_returns_percentage(lower_gcn, improvement_threshold=1.0)
+upper_diminishing_pct = find_diminishing_returns_percentage(upper_gcn_mean, improvement_threshold=1.0)
+lower_diminishing_pct = find_diminishing_returns_percentage(lower_gcn_mean, improvement_threshold=1.0)
 
 
 print("Upper body diminishing returns (1% threshold) at frames:", upper_diminishing_pct)
@@ -340,10 +316,10 @@ colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 x_vals = np.arange(1, len(upper_data_mean) + 1)
 
 all_arrays = [
-    upper_data, lower_data,
-    upper_physics, lower_physics,
-    upper_fusion, lower_fusion,
-    upper_gcn, lower_gcn,
+    upper_data_mean, lower_data_mean,
+    upper_physics_mean, lower_physics_mean,
+    upper_gcn_mean, lower_gcn_mean,
+    upper_gcn_on_amass_mean, lower_gcn_on_amass_mean,
     # upper_data_longer, lower_data_longer
 ]
 all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
@@ -351,12 +327,81 @@ y_min = np.min(all_data[all_data > 0])  # Avoid zero for log scale
 y_max = np.percentile(all_data, 100)
 y_limits = (y_min, y_max)
 
-plot_and_save(upper_data, lower_data, "PhysMoP", "Data", x_vals, colors, y_limits)
-plot_and_save(upper_physics, lower_physics, "PhysMoP", "Physics", x_vals, colors, y_limits)
-plot_and_save(upper_fusion, lower_fusion, "PhysMoP", "Fusion", x_vals, colors, y_limits)
 
-x_vals = np.arange(1, len(upper_gcn) + 1)
-print(upper_gcn.shape, lower_gcn.shape)
-plot_and_save(upper_gcn, lower_gcn, "GCNext", "Data", x_vals, colors, y_limits)
-plot_and_save(upper_gcn_on_amass, lower_gcn_on_amass, "GCNext_on_AMASS", "Data_on_AMASS", x_vals, colors, y_limits)
-# plot_and_save(upper_data_longer, lower_data_longer, "PhysMoP", "Data (Longer)", x_vals, colors, y_limits)
+
+plot_and_save(upper_data_mean, lower_data_mean, 
+              "MPJPE for the Data branch of the PhysMoP model vs. Observed Frames",
+              "PhysMoP", "Data", x_vals, colors, y_limits)
+plot_and_save(upper_physics_mean, lower_physics_mean, 
+              "MPJPE for the Physics branch of the PhysMoP model vs. Observed Frames",
+              "PhysMoP", "Physics", x_vals, colors, y_limits)
+
+x_vals = np.arange(1, len(upper_gcn_mean) + 1)
+print(upper_gcn_on_amass_mean.shape, lower_gcn_on_amass_mean.shape)
+plot_and_save(upper_gcn_mean, lower_gcn_mean, 
+              "MPJPE for the GCNext model vs. Observed Frames",
+              "GCNext", "Data", x_vals, colors, y_limits)
+plot_and_save(upper_gcn_on_amass_mean, lower_gcn_on_amass_mean, 
+              "MPJPE for the GCNext model on AMASS dataset vs. Observed Frames", 
+              "GCNext", "on_AMASS", x_vals, colors, y_limits)
+
+colors = plt.get_cmap('tab10').colors  # 4 distinct colors
+
+# First legend (colored lines)
+lines_color = [
+    Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms'),
+    Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms'),
+    Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms'),
+    Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms'),
+]
+
+# Second legend (line styles)
+lines_style = [
+    Line2D([], [], color='black', linestyle='-', linewidth=1.5, label='Upper body'),
+    Line2D([], [], color='black', linestyle='--', linewidth=1.5, label='Lower body'),
+]
+
+# --- Legend-only figure ---
+fig = plt.figure(figsize=(5, 1.3))
+ax = fig.add_subplot(111)
+ax.axis("off")
+
+# First legend (Prediction Horizon)
+legend1 = ax.legend(
+    handles=lines_color,
+    loc='upper center',
+    ncol=4,
+    frameon=False,
+    fontsize=11,
+    handlelength=2,
+    handletextpad=0.8,
+    columnspacing=1.5,
+    bbox_to_anchor=(0.5, 1.0),
+    title='Prediction Horizon',
+    title_fontsize=12            
+)
+# Move the title upward slightly
+legend1.get_title().set_position((0, 10))  # (x, y) offset in points
+ax.add_artist(legend1)
+
+# Second legend (Line styles)
+legend2 = ax.legend(
+    handles=lines_style,
+    loc='lower center',
+    ncol=2,
+    frameon=False,
+    fontsize=11,
+    handlelength=2,
+    handletextpad=0.8,
+    columnspacing=2,
+    bbox_to_anchor=(0.5, 0.0)  
+)
+
+fig.savefig(
+    "figures/legend_upper_lower.png",
+    dpi=300,
+    bbox_inches="tight",
+    bbox_extra_artists=(legend1, legend2),
+    pad_inches=0.05
+)
+plt.close(fig)
