@@ -110,8 +110,6 @@ if __name__ == "__main__":
         )
 
         for batch_idx, batch in enumerate(tqdm(data_loader, desc="Processing samples")):
-            if batch_idx >= 2:
-                break
             del batch['file_paths']
 
             for rate_idx, downsample_rate in enumerate(downsample_rates):
