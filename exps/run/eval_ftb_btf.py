@@ -3,6 +3,7 @@ from matplotlib.lines import Line2D
 import numpy as np
 import matplotlib.pyplot as plt
 
+fontsize = 16
 # Define your groups
 static_actions = ["Sitting", "SittingDown", "Posing"]
 combination_actions =["Discussion", "Directions", "Phoning", "Eating", "Waiting", "Smoking", "Purchases", "TakingPhoto"]
@@ -11,7 +12,7 @@ dynamic_actions = ["Walking", "WalkingTogether", "WalkingDog", "Greeting"]
 all_actions = static_actions + combination_actions + dynamic_actions
 
 # Parse the data
-def parse_action_data(filename, body_part):
+def parse_physmop_data(filename, body_part):
     data = []
     found_section = False
     header = f"Averaged MPJPE ({body_part}) for each observation length and each selected timestep:"
@@ -84,105 +85,149 @@ def group_average(actions, action_data):
     else:
         return None
 
-back_to_front = parse_gcn_data_average("performance_logs/gcnext_performance_back_to_front.txt")
-# back_to_front_lower = parse_gcn_data_average("performance_logs/gcnext_performance_back_to_front.txt")
-front_to_back_upper = parse_gcn_data("performance_logs/gcnext_performance_front_to_back.txt", "upper")
-front_to_back_lower = parse_gcn_data("performance_logs/gcnext_performance_front_to_back.txt", "lower")
-print(front_to_back_upper.keys())
+# GCN parsing
+gcn_back_to_front = parse_gcn_data_average("performance_logs/gcnext_performance_back_to_front.txt")
+gcn_front_to_back_upper = parse_gcn_data("performance_logs/gcnext_performance_front_to_back.txt", "upper")
+gcn_front_to_back_lower = parse_gcn_data("performance_logs/gcnext_performance_front_to_back.txt", "lower")
 
-front_to_back_upper = group_average(all_actions, front_to_back_upper)
-front_to_back_lower = group_average(all_actions, front_to_back_lower)
-front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 4)
-# Combine upper and lower body data for back-to-front and front-to-back
-# back_to_front = np.mean([back_to_front_upper, back_to_front_lower], axis=0)  # shape: (50, 8)
-# front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 8)
+front_to_back_upper = group_average(all_actions, gcn_front_to_back_upper)
+front_to_back_lower = group_average(all_actions, gcn_front_to_back_lower)
+gcn_front_to_back = np.mean([front_to_back_upper, front_to_back_lower], axis=0)  # shape: (50, 4)
 
-# # Select the relevant columns for the 4 timesteps
-# back_to_front = back_to_front[:, [0, 3, 4, 7]]  # shape: (50, 4)
-# front_to_back = front_to_back[:, [0, 3, 4, 7]]  # shape: (50, 4)
-print("Back-to-front shape:", back_to_front.shape)
-print("Front-to-back shape:", front_to_back.shape)
+# PhysMoP parsing
+physmop_data_back_to_front_upper = parse_physmop_data("performance_logs/physmop_data_mpjpe_log.txt", "upper body")[:, [0, 3, 4, 7]]
+physmop_data_back_to_front_lower = parse_physmop_data("performance_logs/physmop_data_mpjpe_log.txt", "lower body")[:, [0, 3, 4, 7]]
+physmop_data_back_to_front = np.mean([physmop_data_back_to_front_upper, physmop_data_back_to_front_lower], axis=0)  # shape: (50, 4)
+
+physmop_data_front_to_back_upper = parse_physmop_data("performance_logs/physmop_data_mpjpe_log_front_to_back.txt", "upper body")[:, [0, 3, 4, 7]]
+physmop_data_front_to_back_lower = parse_physmop_data("performance_logs/physmop_data_mpjpe_log_front_to_back.txt", "lower body")[:, [0, 3, 4, 7]]
+physmop_data_front_to_back = np.mean([physmop_data_front_to_back_upper, physmop_data_front_to_back_lower], axis=0)  # shape: (50, 4)
+
+physmop_physics_back_to_front_upper = parse_physmop_data("performance_logs/physmop_physics_mpjpe_log.txt", "upper body")[:, [0, 3, 4, 7]]
+physmop_physics_back_to_front_lower = parse_physmop_data("performance_logs/physmop_physics_mpjpe_log.txt", "lower body")[:, [0, 3, 4, 7]]
+physmop_physics_back_to_front = np.mean([physmop_physics_back_to_front_upper, physmop_physics_back_to_front_lower], axis=0)  # shape: (50, 4)
+
+physmop_physics_front_to_back_upper = parse_physmop_data("performance_logs/physmop_physics_mpjpe_log_front_to_back.txt", "upper body")[:, [0, 3, 4, 7]]
+physmop_physics_front_to_back_lower = parse_physmop_data("performance_logs/physmop_physics_mpjpe_log_front_to_back.txt", "lower body")[:, [0, 3, 4, 7]]
+physmop_physics_front_to_back = np.mean([physmop_physics_front_to_back_upper, physmop_physics_front_to_back_lower], axis=0)  # shape: (50, 4)
+
+
 
 # Calculate Mean Absolute Difference (MAD) between ftb and btf for each prediction horizon
-mad = np.mean(np.abs(front_to_back - back_to_front), axis=0)
+mad = np.mean(np.abs(gcn_front_to_back - gcn_back_to_front), axis=0)
 print("Mean Absolute Difference (MAD) between Front-to-Back and Back-to-Front for each prediction horizon:")
 for i, horizon in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
     print(f"{horizon}: {mad[i]:.2f} mm")
 
 # Mean MPJPE per horizon (across frames)
-mean_back = np.mean(back_to_front, axis=0)   # shape: (4,)
-mean_front = np.mean(front_to_back, axis=0)  # shape: (4,)
+mean_back = np.mean(gcn_back_to_front, axis=0)   # shape: (4,)
+mean_front = np.mean(gcn_front_to_back, axis=0)  # shape: (4,)
 
-# Percentage difference (Tim J. Cole, 2000)
 percentage_diff = np.abs(mean_back - mean_front) / ((mean_back + mean_front) / 2) * 100
 print("Percentage difference between back-to-front and front-to-back (%):", percentage_diff)
 
-# Aggregate by group
-def group_average(actions, action_data):
-    group = []
-    for act in actions:
-        if act in action_data:
-            group.append(np.array(action_data[act][:50]))  # shape: (50, 4)
-    if group:
-        return np.mean(np.stack(group), axis=0)  # shape: (50, 4)
-    else:
-        return None
-
-# back_to_front_avg = group_average(all_actions, back_to_front)
-# front_to_back_avg = group_average(all_actions, front_to_back)
-
-# Compute relative MPJPE (percentage of first observation)
-def relative_mpjpe(avg):
-    return 100 * avg / avg[0]  # shape: (50, 4)
-
-# back_to_front_rel = relative_mpjpe(back_to_front_avg)
-# front_to_back_rel = relative_mpjpe(front_to_back_avg)
-
 colors = plt.get_cmap('tab10').colors  # 4 distinct colors
 
+# First legend (colored lines)
+lines_color = [
+    Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms'),
+    Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms'),
+    Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms'),
+    Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms'),
+]
+
+# Second legend (line styles)
+lines_style = [
+    Line2D([], [], color='black', linestyle='-', linewidth=1.5, label='Back-to-front'),
+    Line2D([], [], color='black', linestyle='--', linewidth=1.5, label='Front-to-back'),
+]
+
+# --- GCNext Plot ---
 plt.figure(figsize=(10,6))
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
-    plt.plot(back_to_front[:, i], label=f"{label} Back-to-front", color=colors[i], linestyle='-')
-    plt.plot(front_to_back[:, i], label=f"{label} Front-to-back", color=colors[i], linestyle='--')
-plt.xlabel("Number of Observed Frames")
-plt.ylabel("Absolute MPJPE (mm)")
-plt.title("Absolute MPJPE vs. Observed Frames\n GCNext model")
-
-# First legend
-first_line = Line2D([], [], color=colors[0], linestyle='-', linewidth=1.5, label='80ms')
-second_line = Line2D([], [], color=colors[1], linestyle='-', linewidth=1.5, label='400ms')
-third_line = Line2D([], [], color=colors[2], linestyle='-', linewidth=1.5, label='560ms')
-fourth_line = Line2D([], [], color=colors[3], linestyle='-', linewidth=1.5, label='1000ms')
-
-# Second legend
-line_solid = Line2D([], [], color='black', linestyle='-', linewidth=1.5, label="Back-to-front")
-line_dashed = Line2D([], [], color='black', linestyle='--', linewidth=1.5, label="Front-to-back")
-
-
-# first_legend = plt.legend(handles=[first_line, second_line, third_line, fourth_line], loc='upper right', 
-#                           bbox_to_anchor=(1.0, 1.0), 
-#                           title='Timesteps into the future')
-# ax = plt.gca().add_artist(first_legend)
-# second_legend = plt.legend(handles=[line_solid, line_dashed], loc='upper right', 
-#                            bbox_to_anchor=(0.88, 1.0),
-#                            title='Line types')
-# Combine all handles and labels into one legend
-all_handles = [
-    first_line, second_line, third_line, fourth_line,  # Timesteps/colors
-    line_solid, line_dashed                           # Line types
-]
-all_labels = [
-    '80ms', '400ms', '560ms', '1000ms',               # Timesteps/colors
-    'Back-to-front', 'Front-to-back'                  # Line types
-]
-
-plt.legend(
-    handles=all_handles,
-    labels=all_labels,
-    loc='best',
-    # bbox_to_anchor=(1.6, 1.0),
-    title='Prediction Horizon'
-)
+    plt.plot(gcn_back_to_front[:, i], label=f"{label} Back-to-front", color=colors[i], linestyle='-')
+    plt.plot(gcn_front_to_back[:, i], label=f"{label} Front-to-back", color=colors[i], linestyle='--')
+plt.xlabel("Number of Observed Frames", fontsize=fontsize)
+plt.ylabel("Absolute MPJPE (mm)", fontsize=fontsize)
+plt.tick_params(axis='both', labelsize=fontsize-4)
+plt.title("Absolute MPJPE vs. Observed Frames\nGCNext model", fontsize=fontsize)
+# plt.legend(handles=all_handles, labels=all_labels, loc='best', title='Prediction Horizon')
 plt.grid(True)
 plt.tight_layout()
-plt.show()
+plt.savefig("figures/feeding_order_gcnext.png")
+plt.close()
+
+# --- PhysMoP Data Plot ---
+plt.figure(figsize=(10,6))
+for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
+    plt.plot(physmop_data_back_to_front[:, i], label=f"{label} Back-to-front", color=colors[i], linestyle='-')
+    plt.plot(physmop_data_front_to_back[:, i], label=f"{label} Front-to-back", color=colors[i], linestyle='--')
+plt.xlabel("Number of Observed Frames", fontsize=fontsize)
+plt.ylabel("Absolute MPJPE (mm)", fontsize=fontsize)
+plt.tick_params(axis='both', labelsize=fontsize-4)
+plt.title("Absolute MPJPE vs. Observed Frames\nPhysMoP Data", fontsize=fontsize)
+# plt.legend(handles=all_handles, labels=all_labels, loc='best', title='Prediction Horizon')
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("figures/feeding_order_physmop_data.png")
+plt.close()
+
+# --- PhysMoP Physics Plot ---
+plt.figure(figsize=(10,6))
+for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
+    plt.plot(physmop_physics_back_to_front[:, i], label=f"{label} Back-to-front", color=colors[i], linestyle='-')
+    plt.plot(physmop_physics_front_to_back[:, i], label=f"{label} Front-to-back", color=colors[i], linestyle='--')
+plt.xlabel("Number of Observed Frames", fontsize=fontsize)
+plt.ylabel("Absolute MPJPE (mm)", fontsize=fontsize)
+plt.tick_params(axis='both', labelsize=fontsize-4)
+plt.title("Absolute MPJPE vs. Observed Frames\nPhysMoP Physics", fontsize=fontsize)
+# plt.legend(handles=all_handles, labels=all_labels, loc='best', title='Prediction Horizon')
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("figures/feeding_order_physmop_physics.png")
+plt.close()
+
+# --- Legend-only figure ---
+fig = plt.figure(figsize=(5, 1.3))
+ax = fig.add_subplot(111)
+ax.axis("off")
+
+# First legend (Prediction Horizon)
+legend1 = ax.legend(
+    handles=lines_color,
+    loc='upper center',
+    ncol=4,
+    frameon=False,
+    fontsize=11,
+    handlelength=2,
+    handletextpad=0.8,
+    columnspacing=1.5,
+    bbox_to_anchor=(0.5, 1.0),
+    title='Prediction Horizon',
+    title_fontsize=12            
+)
+# Move the title upward slightly
+legend1.get_title().set_position((0, 10))  # (x, y) offset in points
+ax.add_artist(legend1)
+
+# Second legend (Line styles)
+legend2 = ax.legend(
+    handles=lines_style,
+    loc='lower center',
+    ncol=2,
+    frameon=False,
+    fontsize=11,
+    handlelength=2,
+    handletextpad=0.8,
+    columnspacing=2,
+    bbox_to_anchor=(0.5, 0.0)  
+)
+
+fig.savefig(
+    "figures/legend_ftb_btf.png",
+    dpi=300,
+    bbox_inches="tight",
+    bbox_extra_artists=(legend1, legend2),
+    pad_inches=0.05
+)
+plt.close(fig)
