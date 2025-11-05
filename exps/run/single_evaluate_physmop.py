@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
                         # 2) Resample the input history uniformly at factor alpha, anchored at the boundary
                         #    (no jitter, no duplicates; with anti-alias for alpha>1)
-                        res_in = resample_with_history_boundary_anchored(src_input, input_len, float(downsample_rate), antialias=True)
+                        res_in = resample_with_history_boundary_anchored(src_input, input_len, float(downsample_rate), antialias=False)
 
                         # 3) Keep output at original sampling rate, aligned to the original boundary
                         # original_last_input_idx = int(round(input_len * downsample_rate)) - 1
@@ -237,16 +237,23 @@ if __name__ == "__main__":
             # break  # Process only the first sample for this evaluation
 
         mpjpe_data_all = np.array(mpjpe_data_all)  # shape: (num_samples, num_downsample_rates, 4)
-        mpjpe_data_all = np.mean(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates, 4)
+        mpjpe_data_mean = np.mean(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates, 4)
+        mpjpe_data_std = np.std(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates, 4)
         mpjpe_physics_gt_all = np.array(mpjpe_physics_gt_all)  # shape: (num_samples, num_downsample_rates, 4)
-        mpjpe_physics_gt_all = np.mean(mpjpe_physics_gt_all, axis=0)  # shape: (num_downsample_rates, 4)
+        mpjpe_physics_gt_mean = np.mean(mpjpe_physics_gt_all, axis=0)  # shape: (num_downsample_rates, 4)
+        mpjpe_physics_gt_std = np.std(mpjpe_physics_gt_all, axis=0)  # shape: (num_downsample_rates, 4)
         mpjpe_fusion_all = np.array(mpjpe_fusion_all)  # shape: (num_samples, num_downsample_rates, 4)
-        mpjpe_fusion_all = np.mean(mpjpe_fusion_all, axis=0)  # shape: (num_downsample_rates, 4)
+        mpjpe_fusion_mean = np.mean(mpjpe_fusion_all, axis=0)  # shape: (num_downsample_rates, 4)
+        mpjpe_fusion_std = np.std(mpjpe_fusion_all, axis=0)  # shape: (num_downsample_rates, 4)
 
         # Save performance logs
-        np.savetxt("mpjpe_physmop_data.txt", mpjpe_data_all, delimiter=",")
-        np.savetxt("mpjpe_physmop_physics.txt", mpjpe_physics_gt_all, delimiter=",")
-        np.savetxt("mpjpe_physmop_fusion.txt", mpjpe_fusion_all, delimiter=",")
+        np.savetxt("resampled_physmop_data_consistent_output_mean.csv", mpjpe_data_mean, delimiter=",")
+        np.savetxt("resampled_physmop_physics_consistent_output_mean.csv", mpjpe_physics_gt_mean, delimiter=",")
+        np.savetxt("resampled_physmop_fusion_consistent_output_mean.csv", mpjpe_fusion_mean, delimiter=",")
+
+        np.savetxt("resampled_physmop_data_consistent_output_std.csv", mpjpe_data_std, delimiter=",")
+        np.savetxt("resampled_physmop_physics_consistent_output_std.csv", mpjpe_physics_gt_std, delimiter=",")
+        np.savetxt("resampled_physmop_fusion_consistent_output_std.csv", mpjpe_fusion_std, delimiter=",")
 
     mjpe_gcnext_all = np.loadtxt("mpjpe_gcnext.txt", delimiter=",")
 

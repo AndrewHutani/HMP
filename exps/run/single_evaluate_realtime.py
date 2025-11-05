@@ -261,7 +261,7 @@ mpjpe_data_std = np.std(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates,
 mean_with_n = np.column_stack((mpjpe_data_mean, total_number_of_predictions))
 header = ["80ms", "400ms", "560ms", "1000ms", "n_predictions"]
 
-np.savetxt("resampled_gcn_consistent_output_gcn_mean.csv", mpjpe_data_mean, delimiter=",",  header=",".join(header))
+np.savetxt("resampled_gcn_consistent_output_gcn_mean.csv", mean_with_n, delimiter=",",  header=",".join(header))
 np.savetxt("resampled_gcn_consistent_output_gcn_std.csv", mpjpe_data_std, delimiter=",")
 
 plt.figure()
