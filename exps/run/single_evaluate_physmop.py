@@ -160,7 +160,7 @@ if __name__ == "__main__":
                     else:
                         max_start_idx = batch['q'].shape[1] - total_len
                         max_start_idx = max(0, max_start_idx)
-                    
+                    print(f"Downsample rate: {downsample_rate:.2f}, max_start_idx: {max_start_idx}")
                     stride = 1
                     for start_idx in range(0, max_start_idx + 1, stride):
                         processed_batch = {}
@@ -229,21 +229,21 @@ if __name__ == "__main__":
                                 processed_batch[k] = torch.cat([up_input, out_sel], dim=1)
 
 
-                    # now processed_batch contains input (resampled) + original-rate output for feeding to model
-                    model_output, batch_info = realtime_model.predict(processed_batch)
-                    gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
+                        # now processed_batch contains input (resampled) + original-rate output for feeding to model
+                        model_output, batch_info = realtime_model.predict(processed_batch)
+                        gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
 
-                    eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
+                        eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
 
-                    mpjpe_data = np.mean([eval_results['error_test_data_upper'][0], eval_results['error_test_data_lower'][0]], axis=0)
-                    mpjpe_physics = np.mean([eval_results['error_test_physics_gt_upper'][0], eval_results['error_test_physics_gt_lower'][0]], axis=0)
-                    mpjpe_fusion = np.mean([eval_results['error_test_fusion_upper'][0], eval_results['error_test_fusion_lower'][0]], axis=0)
+                        mpjpe_data = np.mean([eval_results['error_test_data_upper'][0], eval_results['error_test_data_lower'][0]], axis=0)
+                        mpjpe_physics = np.mean([eval_results['error_test_physics_gt_upper'][0], eval_results['error_test_physics_gt_lower'][0]], axis=0)
+                        mpjpe_fusion = np.mean([eval_results['error_test_fusion_upper'][0], eval_results['error_test_fusion_lower'][0]], axis=0)
 
-                    # Aggregate all selected indices for this rate
-                    mpjpe_data_by_rate[rate_idx].append(mpjpe_data[selected_indices])
-                    mpjpe_physics_by_rate[rate_idx].append(mpjpe_physics[selected_indices])
-                    mpjpe_fusion_by_rate[rate_idx].append(mpjpe_fusion[selected_indices])
-                    preds_count_by_rate[rate_idx] += 1
+                        # Aggregate all selected indices for this rate
+                        mpjpe_data_by_rate[rate_idx].append(mpjpe_data[selected_indices])
+                        mpjpe_physics_by_rate[rate_idx].append(mpjpe_physics[selected_indices])
+                        mpjpe_fusion_by_rate[rate_idx].append(mpjpe_fusion[selected_indices])
+                        preds_count_by_rate[rate_idx] += 1
 
 
 
