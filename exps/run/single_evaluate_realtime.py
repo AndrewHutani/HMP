@@ -174,6 +174,7 @@ action = "walking"  # Change this to the action you want to evaluate
 config.motion.h36m_target_length = config.motion.h36m_target_length_eval
 dataset = H36MEval(config, 'test')
 mpjpe_data_all = []
+total_number_of_predictions = []
 for walking_sample, _ in dataset.get_full_sequences_for_action(action):
     # walking_sample, root_sample = dataset.get_full_sequences_for_action(action)[0]
 # print("Walking sample shape: ", walking_sample.shape)
@@ -193,6 +194,8 @@ for walking_sample, _ in dataset.get_full_sequences_for_action(action):
 
     input_len = config.motion.h36m_input_length
     output_len = config.motion.h36m_target_length_eval
+
+    num_predictions_per_rate = []
 
     for downsample_rate in downsample_rates:
         mpjpe_data_per_downsample_rate = []
@@ -219,7 +222,7 @@ for walking_sample, _ in dataset.get_full_sequences_for_action(action):
                                 downsample_rate,
                                 input_len,
                                 start_idx=start_idx,
-                                antialias=True
+                                antialias=False
                             )
 
             output_start = src_end
@@ -243,13 +246,23 @@ for walking_sample, _ in dataset.get_full_sequences_for_action(action):
             # visualize_continuous_motion(walking_sample_resampled, skeleton_type='h36m',
             #                             save_gif_path='output_{}.gif'.format(downsample_rate))
             # break
+        num_predictions_per_rate.append(len(mpjpe_data_per_downsample_rate))
         # break
         mpjpe_data_per_sample.append(np.mean(np.array(mpjpe_data_per_downsample_rate), axis=0))
+    total_number_of_predictions.append(num_predictions_per_rate)
     mpjpe_data_all.append(np.array(mpjpe_data_per_sample))
-print(np.array(mpjpe_data_all).shape)
-mpjpe_data_all = np.mean(np.array(mpjpe_data_all), axis=0)  # shape: (num_downsample_rates, 4)
 
-np.savetxt("mpjpe_gcnext.txt", mpjpe_data_all, delimiter=",")
+total_number_of_predictions = np.sum(np.array(total_number_of_predictions), axis=0)
+print("Total number of predictions per downsample rate: ", total_number_of_predictions)
+mpjpe_data_all = np.array(mpjpe_data_all) # shape: (num_samples, num_downsample_rates, 4)
+mpjpe_data_mean = np.mean(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates, 4)
+mpjpe_data_std = np.std(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates, 4)
+# Stack the mean and n_predictions as columns
+mean_with_n = np.column_stack((mpjpe_data_mean, total_number_of_predictions))
+header = ["80ms", "400ms", "560ms", "1000ms", "n_predictions"]
+
+np.savetxt("resampled_gcn_consistent_output_gcn_mean.csv", mpjpe_data_mean, delimiter=",",  header=",".join(header))
+np.savetxt("resampled_gcn_consistent_output_gcn_std.csv", mpjpe_data_std, delimiter=",")
 
 plt.figure()
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
