@@ -95,6 +95,7 @@ if __name__ == "__main__":
     mpjpe_data_all = None
     mpjpe_physics_gt_all = None
     mpjpe_fusion_all = None
+    downsample_rates = np.arange(3, 0.1, -0.2)
 
     # if os.path.exists("mpjpe_physmop_data.txt"):
     #     mpjpe_data_all = np.loadtxt("mpjpe_physmop_data.txt", delimiter=",")
@@ -105,155 +106,171 @@ if __name__ == "__main__":
     
     # Check if all three arrays were loaded
     if mpjpe_data_all is not None and mpjpe_physics_gt_all is not None and mpjpe_fusion_all is not None:
-        print("Performance logs found.")
-        downsample_rates = np.arange(3, 0.1, -0.2)
+        print("Performance logs found.")      
     
     else:
         print("Performance logs not found. Running evaluation...")
+        with torch.no_grad():
 
-        realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
-        # Option 2: Load only walking data
-        # print("\n=== Loading walking data only ===")
-        # walking_dataset = ActionAwareDataset(
-        #     'data/data_processed/h36m_test_50.pkl',
-        #     specific_action='walking'
-        # )
-        data_loader = DataLoader(dataset=BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length, filter_str="treadmill_norm"),
-                                    batch_size=1,
-                                    shuffle=False,
-                                    num_workers=8)
-        
-        mpjpe_data_all = []
-        mpjpe_physics_gt_all = []
-        mpjpe_fusion_all = []
-        # Process first walking sample
-        for batch_idx, batch in enumerate(tqdm(data_loader, desc="Processing samples")):
-            # print(f"Action: {batch['action'][0]}")
-            # print(f"File: {batch['file_path'][0]}")
-            # print("Batch keys:", batch.keys())
-            # print("Root joint:", batch['q'][:, :25, :3])
-            # print(f"Batch shape: {batch['q'].shape}")
-            # print(f"Batch file paths: {batch['file_paths']}")
+            realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
+            # Option 2: Load only walking data
+            # print("\n=== Loading walking data only ===")
+            # walking_dataset = ActionAwareDataset(
+            #     'data/data_processed/h36m_test_50.pkl',
+            #     specific_action='walking'
+            # )
+            data_loader = DataLoader(dataset=BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length, filter_str="treadmill_norm"),
+                                        batch_size=1,
+                                        shuffle=False,
+                                        num_workers=8)
             
-            del batch['file_paths']
+            mpjpe_data_all = []
+            mpjpe_physics_gt_all = []
+            mpjpe_fusion_all = []
 
-            # Assume that the model always predicts the same number of frames, at the same frequency
-            normal_batch = {k: v[:, -config.total_length:, ...] if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+            num_rates = len(downsample_rates)
+            # Aggregate MPJPEs for each rate (across all samples/windows)
+            mpjpe_data_by_rate = [[] for _ in range(num_rates)]
+            mpjpe_physics_by_rate = [[] for _ in range(num_rates)]
+            mpjpe_fusion_by_rate = [[] for _ in range(num_rates)]
+            preds_count_by_rate = [0 for _ in range(num_rates)]
+            # Process first walking sample
+            for batch_idx, batch in enumerate(tqdm(data_loader, desc="Processing samples")):
+                # print(f"Action: {batch['action'][0]}")
+                # print(f"File: {batch['file_path'][0]}")
+                # print("Batch keys:", batch.keys())
+                # print("Root joint:", batch['q'][:, :25, :3])
+                # print(f"Batch shape: {batch['q'].shape}")
+                # print(f"Batch file paths: {batch['file_paths']}")
+                
+                del batch['file_paths']
+
+                for rate_idx, downsample_rate in enumerate(downsample_rates):
+                    processed_batch = {}
+
+                    input_len = config.hist_length
+                    total_len = config.total_length
+                    output_len = total_len - input_len
+
+                    # Compute max_start_idx for sliding window
+                    if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
+                        max_end_index = int(round(total_len * downsample_rate))
+                        max_start_idx = batch['q'].shape[1] - max_end_index
+                        max_start_idx = max(0, max_start_idx)
+                    else:
+                        max_start_idx = batch['q'].shape[1] - total_len
+                        max_start_idx = max(0, max_start_idx)
+                    
+                    stride = 1
+                    for start_idx in range(0, max_start_idx + 1, stride):
+                        processed_batch = {}
+
+                        if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
+                            src_span = int(round(input_len * downsample_rate))
+                            src_start = start_idx
+                            src_end = min(start_idx + src_span, batch['q'].shape[1])
+
+                            # Downsample only the input part, then take the next output_len frames at original rate
+                            for k, v in batch.items():
+                                if not isinstance(v, torch.Tensor):
+                                    processed_batch[k] = v
+                                    continue
+
+                                # 1) Take the original input history support on the native grid
+                                src_input = v[:, src_start:src_end, ...]  # [B, input_len, ...] chronological
+
+                                # 2) Resample the input history uniformly at factor alpha, anchored at the boundary
+                                #    (no jitter, no duplicates; with anti-alias for alpha>1)
+                                res_in = resample_with_history_boundary_anchored(src_input, input_len, float(downsample_rate), antialias=False)
+
+                                # 3) Keep output at original sampling rate, aligned to the original boundary
+
+                                output_indices = np.arange(src_end,
+                                                        src_end + output_len)
+                                # print("Output indices:", output_indices)
+                                output_indices = np.clip(output_indices, 0, v.shape[1] - 1)
+                                out_sel = torch.index_select(v, 1, torch.from_numpy(output_indices).to(v.device))
+
+                                # 4) Concatenate input (resampled) + output (original grid)
+                                processed_batch[k] = torch.cat([res_in, out_sel], dim=1)
+
+                        else:
+                            # Upsample input: interpolate the input portion, then take following output frames
+                            upsample_factor = 1.0 / downsample_rate
+                            for k, v in batch.items():
+                                if not isinstance(v, torch.Tensor):
+                                    processed_batch[k] = v
+                                    continue
+
+                                # take the original input slice (first input_len frames of the available sequence)
+                                src_input = v[:, start_idx:start_idx + input_len, ...]  # [B, input_len, ...]
+                                # prepare for interpolation: [B, features, time]
+                                b, t = src_input.shape[0], src_input.shape[1]
+                                rest_shape = src_input.shape[2:]
+                                feat = int(np.prod(rest_shape))
+                                src_perm = src_input.reshape(b, t, feat).permute(0, 2, 1)  # [B, feat, time]
+                                new_time = int(np.round(t * upsample_factor))
+                                # interpolate per-batch by looping (F.interpolate expects 3D or 4D; do each batch separately)
+                                upsampled = []
+                                for bi in range(b):
+                                    up = F.interpolate(src_perm[bi:bi+1], size=new_time, mode='linear', align_corners=True)
+                                    upsampled.append(up)
+                                upsampled = torch.cat(upsampled, dim=0)  # [B, feat, new_time]
+                                up_perm = upsampled.permute(0, 2, 1).reshape(b, new_time, *rest_shape)
+                                # take last input_len frames of upsampled (or pad/truncate)
+                                up_input = up_perm[:, -input_len:, ...]
+
+                                # keep original output frames after the original input_end
+                                original_last_input_idx = start_idx + input_len - 1
+                                output_indices = np.arange(original_last_input_idx + 1, original_last_input_idx + 1 + output_len)
+                                output_indices = np.clip(output_indices, 0, v.shape[1] - 1)
+                                out_sel = torch.index_select(v, 1, torch.from_numpy(output_indices).to(v.device))
+
+                                processed_batch[k] = torch.cat([up_input, out_sel], dim=1)
 
 
-            downsample_rates = np.arange(3, 0.1, -0.2)  # From 3 to 0.1, step -0.2
-            mpjpe_data_results = []
-            mpjpe_physics_results = []
-            mpjpe_fusion_results = []
+                    # now processed_batch contains input (resampled) + original-rate output for feeding to model
+                    model_output, batch_info = realtime_model.predict(processed_batch)
+                    gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
 
-            for downsample_rate in downsample_rates:
-                processed_batch = {}
+                    eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
 
-                input_len = config.hist_length
-                total_len = config.total_length
-                output_len = total_len - input_len
+                    mpjpe_data = np.mean([eval_results['error_test_data_upper'][0], eval_results['error_test_data_lower'][0]], axis=0)
+                    mpjpe_physics = np.mean([eval_results['error_test_physics_gt_upper'][0], eval_results['error_test_physics_gt_lower'][0]], axis=0)
+                    mpjpe_fusion = np.mean([eval_results['error_test_fusion_upper'][0], eval_results['error_test_fusion_lower'][0]], axis=0)
 
-                if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
-                    # Downsample only the input part, then take the next output_len frames at original rate
-                    for k, v in batch.items():
-                        if not isinstance(v, torch.Tensor):
-                            processed_batch[k] = v
-                            continue
-
-                        # 1) Take the original input history support on the native grid
-                        src_input = v[:, :int(round(input_len * downsample_rate)), ...]  # [B, input_len, ...] chronological
-
-                        # 2) Resample the input history uniformly at factor alpha, anchored at the boundary
-                        #    (no jitter, no duplicates; with anti-alias for alpha>1)
-                        res_in = resample_with_history_boundary_anchored(src_input, input_len, float(downsample_rate), antialias=False)
-
-                        # 3) Keep output at original sampling rate, aligned to the original boundary
-                        # original_last_input_idx = int(round(input_len * downsample_rate)) - 1
-                       
-                        output_indices = np.arange(int(round(input_len * downsample_rate)),
-                                                int(round(input_len * downsample_rate)) + output_len)
-                        # print("Output indices:", output_indices)
-                        output_indices = np.clip(output_indices, 0, v.shape[1] - 1)
-                        out_sel = torch.index_select(v, 1, torch.from_numpy(output_indices).to(v.device))
-
-                        # 4) Concatenate input (resampled) + output (original grid)
-                        processed_batch[k] = torch.cat([res_in, out_sel], dim=1)
-
-                else:
-                    # Upsample input: interpolate the input portion, then take following output frames
-                    upsample_factor = 1.0 / downsample_rate
-                    for k, v in batch.items():
-                        if not isinstance(v, torch.Tensor):
-                            processed_batch[k] = v
-                            continue
-
-                        # take the original input slice (first input_len frames of the available sequence)
-                        src_input = v[:, :input_len, ...]  # [B, input_len, ...]
-                        # prepare for interpolation: [B, features, time]
-                        b, t = src_input.shape[0], src_input.shape[1]
-                        rest_shape = src_input.shape[2:]
-                        feat = int(np.prod(rest_shape))
-                        src_perm = src_input.reshape(b, t, feat).permute(0, 2, 1)  # [B, feat, time]
-                        new_time = int(np.round(t * upsample_factor))
-                        # interpolate per-batch by looping (F.interpolate expects 3D or 4D; do each batch separately)
-                        upsampled = []
-                        for bi in range(b):
-                            up = F.interpolate(src_perm[bi:bi+1], size=new_time, mode='linear', align_corners=True)
-                            upsampled.append(up)
-                        upsampled = torch.cat(upsampled, dim=0)  # [B, feat, new_time]
-                        up_perm = upsampled.permute(0, 2, 1).reshape(b, new_time, *rest_shape)
-                        # take last input_len frames of upsampled (or pad/truncate)
-                        up_input = up_perm[:, -input_len:, ...]
-
-                        # keep original output frames after the original input_end
-                        original_last_input_idx = input_len - 1
-                        output_indices = np.arange(original_last_input_idx + 1, original_last_input_idx + 1 + output_len)
-                        output_indices = np.clip(output_indices, 0, v.shape[1] - 1)
-                        out_sel = torch.index_select(v, 1, torch.from_numpy(output_indices).to(v.device))
-
-                        processed_batch[k] = torch.cat([up_input, out_sel], dim=1)
-
-                # now processed_batch contains input (resampled) + original-rate output for feeding to model
-                model_output, batch_info = realtime_model.predict(processed_batch)
-                gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
-
-                # visualize_continuous_motion(gt_J, title="Ground Truth Motion", skeleton_type="amass", save_gif_path="output_data_{}.gif".format(downsample_rate))
-                # visualize_motion_with_ground_truth(pred_J_data.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Data)",
-                #                                     skeleton_type="amass", save_gif_path="output_data_{}.gif".format(downsample_rate))
-                # visualize_motion_with_ground_truth(pred_J_physics_gt.cpu().detach().numpy(), gt_J.cpu().detach().numpy(), title="Predicted vs Ground Truth Motion (Physics)",
-                #                                     skeleton_type="amass", save_gif_path="output_physics_{}.gif".format(downsample_rate))
-                eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
+                    # Aggregate all selected indices for this rate
+                    mpjpe_data_by_rate[rate_idx].append(mpjpe_data[selected_indices])
+                    mpjpe_physics_by_rate[rate_idx].append(mpjpe_physics[selected_indices])
+                    mpjpe_fusion_by_rate[rate_idx].append(mpjpe_fusion[selected_indices])
+                    preds_count_by_rate[rate_idx] += 1
 
 
-                mpjpe_data = np.mean([eval_results['error_test_data_upper'][0], eval_results['error_test_data_lower'][0]], axis=0)
-                mpjpe_data_results.append(mpjpe_data[selected_indices])  # shape: (4,)
-                mpjpe_physics_gt = np.mean([eval_results['error_test_physics_gt_upper'][0], eval_results['error_test_physics_gt_lower'][0]], axis=0)
-                mpjpe_physics_results.append(mpjpe_physics_gt[selected_indices])  # shape: (4,)
-                mpjpe_fusion = np.mean([eval_results['error_test_fusion_upper'][0], eval_results['error_test_fusion_lower'][0]], axis=0)
-                mpjpe_fusion_results.append(mpjpe_fusion[selected_indices])  # shape: (4,)
-            mpjpe_data_all.append(np.array(mpjpe_data_results))  # shape: (num_downsample_rates, 4)
-            mpjpe_physics_gt_all.append(np.array(mpjpe_physics_results))  # shape: (num_downsample_rates, 4)
-            mpjpe_fusion_all.append(np.array(mpjpe_fusion_results))  # shape: (num_downsample_rates, 4)
-            # break  # Process only the first sample for this evaluation
 
-        mpjpe_data_all = np.array(mpjpe_data_all)  # shape: (num_samples, num_downsample_rates, 4)
-        mpjpe_data_mean = np.mean(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates, 4)
-        mpjpe_data_std = np.std(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates, 4)
-        mpjpe_physics_gt_all = np.array(mpjpe_physics_gt_all)  # shape: (num_samples, num_downsample_rates, 4)
-        mpjpe_physics_gt_mean = np.mean(mpjpe_physics_gt_all, axis=0)  # shape: (num_downsample_rates, 4)
-        mpjpe_physics_gt_std = np.std(mpjpe_physics_gt_all, axis=0)  # shape: (num_downsample_rates, 4)
-        mpjpe_fusion_all = np.array(mpjpe_fusion_all)  # shape: (num_samples, num_downsample_rates, 4)
-        mpjpe_fusion_mean = np.mean(mpjpe_fusion_all, axis=0)  # shape: (num_downsample_rates, 4)
-        mpjpe_fusion_std = np.std(mpjpe_fusion_all, axis=0)  # shape: (num_downsample_rates, 4)
+        # Compute mean and std for each rate
+        mpjpe_data_mean = np.array([np.mean(mpjpe_data_by_rate[i], axis=0) for i in range(num_rates)])
+        mpjpe_data_std  = np.array([np.std(mpjpe_data_by_rate[i], axis=0)  for i in range(num_rates)])
+        mpjpe_physics_mean = np.array([np.mean(mpjpe_physics_by_rate[i], axis=0) for i in range(num_rates)])
+        mpjpe_physics_std  = np.array([np.std(mpjpe_physics_by_rate[i], axis=0)  for i in range(num_rates)])
+        mpjpe_fusion_mean = np.array([np.mean(mpjpe_fusion_by_rate[i], axis=0) for i in range(num_rates)])
+        mpjpe_fusion_std  = np.array([np.std(mpjpe_fusion_by_rate[i], axis=0)  for i in range(num_rates)])
+
+        # Save prediction counts per downsample rate
+        mpjpe_counts_all = np.array(preds_count_by_rate)
+        print("Predictions per downsample rate:", mpjpe_counts_all)
 
         # Save performance logs
-        np.savetxt("resampled_physmop_data_consistent_output_mean.csv", mpjpe_data_mean, delimiter=",")
-        np.savetxt("resampled_physmop_physics_consistent_output_mean.csv", mpjpe_physics_gt_mean, delimiter=",")
-        np.savetxt("resampled_physmop_fusion_consistent_output_mean.csv", mpjpe_fusion_mean, delimiter=",")
-
+        mpjpe_data_mean = np.column_stack((mpjpe_data_mean, mpjpe_counts_all))
+        mpjpe_physics_mean = np.column_stack((mpjpe_physics_mean, mpjpe_counts_all))
+        mpjpe_fusion_mean = np.column_stack((mpjpe_fusion_mean, mpjpe_counts_all))
+        header = ["80ms", "400ms", "560ms", "1000ms", "n_predictions"]
+        np.savetxt("resampled_physmop_data_consistent_output_mean.csv", mpjpe_data_mean, delimiter=",", header=",".join(header))
+        np.savetxt("resampled_physmop_physics_consistent_output_mean.csv", mpjpe_physics_mean, delimiter=",", header=",".join(header))
+        np.savetxt("resampled_physmop_fusion_consistent_output_mean.csv", mpjpe_fusion_mean, delimiter=",", header=",".join(header))
         np.savetxt("resampled_physmop_data_consistent_output_std.csv", mpjpe_data_std, delimiter=",")
-        np.savetxt("resampled_physmop_physics_consistent_output_std.csv", mpjpe_physics_gt_std, delimiter=",")
+        np.savetxt("resampled_physmop_physics_consistent_output_std.csv", mpjpe_physics_std, delimiter=",")
         np.savetxt("resampled_physmop_fusion_consistent_output_std.csv", mpjpe_fusion_std, delimiter=",")
+
 
     mjpe_gcnext_all = np.loadtxt("mpjpe_gcnext.txt", delimiter=",")
 
