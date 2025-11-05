@@ -96,12 +96,12 @@ if __name__ == "__main__":
     mpjpe_physics_gt_all = None
     mpjpe_fusion_all = None
 
-    if os.path.exists("mpjpe_physmop_data.txt"):
-        mpjpe_data_all = np.loadtxt("mpjpe_physmop_data.txt", delimiter=",")
-    if os.path.exists("mpjpe_physmop_physics.txt"):
-        mpjpe_physics_gt_all = np.loadtxt("mpjpe_physmop_physics.txt", delimiter=",")
-    if os.path.exists("mpjpe_physmop_fusion.txt"):
-        mpjpe_fusion_all = np.loadtxt("mpjpe_physmop_fusion.txt", delimiter=",")
+    # if os.path.exists("mpjpe_physmop_data.txt"):
+    #     mpjpe_data_all = np.loadtxt("mpjpe_physmop_data.txt", delimiter=",")
+    # if os.path.exists("mpjpe_physmop_physics.txt"):
+    #     mpjpe_physics_gt_all = np.loadtxt("mpjpe_physmop_physics.txt", delimiter=",")
+    # if os.path.exists("mpjpe_physmop_fusion.txt"):
+    #     mpjpe_fusion_all = np.loadtxt("mpjpe_physmop_fusion.txt", delimiter=",")
     
     # Check if all three arrays were loaded
     if mpjpe_data_all is not None and mpjpe_physics_gt_all is not None and mpjpe_fusion_all is not None:
