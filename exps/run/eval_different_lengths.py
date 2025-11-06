@@ -1,6 +1,8 @@
 import re
+from matplotlib.patches import Patch
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 actions = [
     "walking", "eating", "smoking", "discussion", "directions",
@@ -11,6 +13,7 @@ actions = [
 time_horizons = ["80ms", "400ms", "560ms", "1000ms"]
 figsize = (10, 6)
 dpi = 300
+fontsize = 16
 
 # --- PhysMoP Data Loading ---
 def parse_physmop_data(filename, body_part):
@@ -137,12 +140,13 @@ y_max_rel = max(physmop_percentual_performance.max(), gcn_percentual_performance
 fig1, ax1 = plt.subplots(figsize=figsize)
 for i in range(4):
     ax1.plot(physmop_hist_lengths, physmop_performance_data[:, i], marker='o', label=f'{time_horizons[i]}')
-ax1.set_xlabel('Retrained historical length (frames)')
+ax1.set_xlabel('Retrained historical length (frames)', fontsize=fontsize)
 ax1.set_xlim(x_min, x_max)
-ax1.set_ylabel('Absolute MPJPE (mm)')
+ax1.set_ylabel('Absolute MPJPE (mm)', fontsize=fontsize)
 ax1.set_ylim(y_min_abs, y_max_abs)
-ax1.set_title('PhysMoP: MPJPE vs Retrained historical length')
-ax1.legend(title='Prediction horizon')
+ax1.tick_params(axis='both', which='major', labelsize=fontsize-4)
+ax1.set_title('PhysMoP: MPJPE vs Retrained historical length', fontsize=fontsize)
+# ax1.legend(title='Prediction horizon')
 ax1.grid(True)
 fig1.tight_layout()
 fig1.savefig('figures/physmop_performance_different_lengths.png', dpi=dpi)
@@ -159,10 +163,11 @@ ax2.set_xticks(x_physmop + 1.5*bar_width)
 ax2.set_xticklabels(physmop_hist_lengths)
 ax2.set_xlim(x_min, x_bar_max)
 ax2.set_ylim(y_min_rel, y_max_rel)
-ax2.set_xlabel('Historical Length (frames)')
-ax2.set_ylabel('Relative MPJPE/Latency (to baseline)')
-ax2.set_title('PhysMoP: Relative Performance by Historical Length')
-ax2.legend(title='Prediction horizon', loc='upper right')
+ax2.set_xlabel('Historical Length (frames)', fontsize=fontsize)
+ax2.set_ylabel('Relative MPJPE/Latency (to baseline)', fontsize=fontsize)
+ax2.set_title('PhysMoP: Relative Performance by Historical Length', fontsize=fontsize)
+ax2.tick_params(axis='both', which='major', labelsize=fontsize-4)
+# ax2.legend(title='Prediction horizon', loc='upper right')
 ax2.grid(True)
 fig2.tight_layout()
 fig2.savefig('figures/physmop_bar_performance.png', dpi=dpi)
@@ -171,12 +176,13 @@ fig2.savefig('figures/physmop_bar_performance.png', dpi=dpi)
 fig3, ax3 = plt.subplots(figsize=figsize)
 for i in range(4):
     ax3.plot(gcn_hist_lengths, gcn_performance_data[:, i], marker='o', label=f'{time_horizons[i]}')
-ax3.set_xlabel('Retrained historical length (frames)')
+ax3.set_xlabel('Retrained historical length (frames)', fontsize=fontsize)
 ax3.set_xlim(x_min, x_max)
-ax3.set_ylabel('Absolute MPJPE (mm)')
+ax3.set_ylabel('Absolute MPJPE (mm)', fontsize=fontsize)
 ax3.set_ylim(y_min_abs, y_max_abs)
-ax3.set_title('GCNext: MPJPE vs Retrained historical length')
-ax3.legend(title='Prediction horizon')
+ax3.set_title('GCNext: MPJPE vs Retrained historical length', fontsize=fontsize)
+ax3.tick_params(axis='both', which='major', labelsize=fontsize-4)
+# ax3.legend(title='Prediction horizon')
 ax3.grid(True)
 fig3.tight_layout()
 fig3.savefig('figures/gcnext_performance_different_lengths.png', dpi=dpi)
@@ -193,10 +199,69 @@ ax4.set_xticks(x_gcn + 1.5*bar_width)
 ax4.set_xticklabels(gcn_hist_lengths)
 ax4.set_xlim(x_min, x_bar_max)
 ax4.set_ylim(y_min_rel, y_max_rel)
-ax4.set_xlabel('Historical Length (frames)')
-ax4.set_ylabel('Relative MPJPE/Latency (to baseline)')
-ax4.set_title('GCNext: Relative Performance by Historical Length')
-ax4.legend(title='Prediction horizon', loc='upper right')
+ax4.set_xlabel('Historical Length (frames)', fontsize=fontsize)
+ax4.set_ylabel('Relative MPJPE/Latency (to baseline)', fontsize=fontsize)
+ax4.set_title('GCNext: Relative Performance by Historical Length', fontsize=fontsize)
+ax4.tick_params(axis='both', which='major', labelsize=fontsize-4)
+# ax4.legend(title='Prediction horizon', loc='upper right')
 ax4.grid(True)
 fig4.tight_layout()
 fig4.savefig('figures/gcnext_bar_performance.png', dpi=dpi)
+
+# --- Define legend handles ---
+time_horizons = ["80ms", "400ms", "560ms", "1000ms"]
+bar_colors = ['C0', 'C1', 'C2', 'C3']
+bar_handles = [
+    Patch(facecolor=bar_colors[i], edgecolor='black', label=time_horizons[i])
+    for i in range(len(time_horizons))
+]
+
+line_handles = [
+    Line2D([0], [0], color='purple', marker='o', linestyle='-', label='Latency'),
+    Line2D([0], [0], color='orange', marker='o', linestyle='--', label='Single Pass Time'),
+    # Uncomment if you want Prediction Time as a line:
+    # Line2D([0], [0], color='pink', marker='o', linestyle='-', label='Prediction Time'),
+]
+
+# --- Create legend-only figure ---
+fig, ax = plt.subplots(figsize=(6.5, 1.3))
+ax.axis('off')
+
+# First row: lines
+legend1 = ax.legend(
+    handles=line_handles,
+    loc='upper center',
+    ncol=len(line_handles),
+    frameon=False,
+    bbox_to_anchor=(0.5, 1.2),
+    fontsize=11,
+    handlelength=2.5,
+    columnspacing=2,
+    title='Real-time Metrics',
+    title_fontsize=12
+)
+ax.add_artist(legend1)
+
+# Move the title upward slightly
+legend1.get_title().set_position((0, 10))  # (x, y) offset in points
+
+
+# Second row: bars
+legend2 = ax.legend(
+    handles=bar_handles,
+    loc='lower center',
+    ncol=len(bar_handles),
+    frameon=False,
+    bbox_to_anchor=(0.5, -0.2),
+    fontsize=11,
+    handlelength=2.5,
+    columnspacing=2,
+    title='Bars (Prediction horizon)',
+    title_fontsize=12
+)
+# Move the title upward slightly
+legend2.get_title().set_position((0, 10))  # (x, y) offset in points
+ax.add_artist(legend2)
+
+fig.savefig('figures/barplot_legend.png', bbox_inches='tight', dpi=300, pad_inches=0.2)
+plt.close(fig)
