@@ -125,7 +125,7 @@ if __name__ == "__main__":
                     max_start_idx = batch['q'].shape[1] - total_len
                     max_start_idx = max(0, max_start_idx)
 
-                stride = 1
+                stride = 20
                 for start_idx in range(0, max_start_idx + 1, stride):
                     processed_batch = {}
                     if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
