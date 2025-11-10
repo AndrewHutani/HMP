@@ -4,11 +4,11 @@ import argparse
 import os
 
 from tqdm import tqdm
-from config import config
+from gcnext_model.config import config
 
 import random
 
-from realtime import RealTimePrediction
+from gcnext_model.RealtimeGCNext import RealtimeGCNext
 
 from model import GCNext as Model
 from datasets.h36m_eval import H36MEval
@@ -45,7 +45,7 @@ for action in actions:
     # Select a random index per action
     random_idx = random.choice(action_indices)
 
-    realtime_predictor = RealTimePrediction(model, config, tau=0.5)
+    realtime_predictor = RealtimeGCNext(model, config, tau=0.5)
     visualize = False
     debug = False
 

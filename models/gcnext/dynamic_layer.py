@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from einops.layers.torch import Rearrange
-from skeleton import Skeleton
+from models.gcnext.skeleton import Skeleton
 
 
 class LN(nn.Module):

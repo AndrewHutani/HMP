@@ -9,7 +9,7 @@ import numpy as np
 import copy
 import time 
 
-from config import config
+from gcnext_model.config import config
 from model import GCNext as Model
 from datasets.h36m import H36MDataset
 from utils.logger import get_logger, print_and_log_info

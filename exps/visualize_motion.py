@@ -3,10 +3,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import os, sys
 
-from config import config
-from datasets.h36m_eval import H36MEval
+
 import torch
-from utils.misc import expmap2rotmat_torch, find_indices_256, find_indices_srnn, rotmat2xyz_torch
 import matplotlib.animation as animation
 from matplotlib.animation import FFMpegWriter 
 

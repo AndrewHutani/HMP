@@ -3,18 +3,16 @@ import torch.nn as nn
 
 import numpy as np 
 
-from models.PhysMoP import PhysMoP
-from models.humanmodel import SMPL, SMPLH
+from models.physmop.PhysMoP import PhysMoP
+from models.physmop.humanmodel import SMPL, SMPLH
 
-import utils.config as config
-from utils.utils import remove_singlular_batch, smoothness_constraint, batch_roteulerSMPL, compute_errors, compute_error_accel_T
+import models.physmop.utils.config as config
+from models.physmop.utils.utils import remove_singlular_batch, smoothness_constraint, batch_roteulerSMPL, compute_errors, compute_error_accel_T
 
-import utils.constants as constants
+import models.physmop.utils.constants as constants
 from dataclasses import dataclass
 
-from visualize_motion import visualize_continuous_motion, visualize_motion_with_ground_truth
-
-from dataset.action_aware_dataset import ActionAwareDataset, ActionSampler
+from exps.visualize_motion import visualize_continuous_motion, visualize_motion_with_ground_truth
 
 from tqdm import tqdm
 

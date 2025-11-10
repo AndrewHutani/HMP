@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # Needed for 3D plotting
-from config import config
+from gcnext_model.config import config
 import argparse
 from datasets.h36m_eval import H36MEval
 

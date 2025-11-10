@@ -2,9 +2,9 @@ import time
 import torch
 import numpy as np
 import argparse
-from config import config
+from gcnext_model.config import config
 
-from realtime import RealTimePrediction
+from gcnext_model.RealtimeGCNext import RealtimeGCNext
 
 from model import GCNext as Model
 from datasets.h36m_eval import H36MEval
@@ -15,7 +15,7 @@ from prediction_times import prediction_times
 
 from visualize_motion import visualize_continuous_motion, visualize_motion_with_ground_truth
 
-class RealTimeGlobalPrediction(RealTimePrediction):
+class RealTimeGlobalPrediction(RealtimeGCNext):
     # def add_global_translation(self, root_translation=None):
     #     """
     #     Add global translation to the predicted motion based on the root translation.

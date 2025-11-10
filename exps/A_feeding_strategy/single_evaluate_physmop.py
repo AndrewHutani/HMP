@@ -1,12 +1,11 @@
-from exps.physmop_model.RealtimePhysMop import RealtimePhysMop
+from physmop_model.RealtimePhysMop import RealtimePhysMop
 from dataset.action_aware_dataset import ActionAwareDataset
 from torch.utils.data import DataLoader
 from visualize_motion import visualize_motion_with_ground_truth, visualize_continuous_motion
 
 from dataset.full_sequence_dataset_test import BaseDataset_test
 
-import utils.config as config
-from prediction_times import prediction_times
+import physmop_model.utils.config as config
 import time
 import numpy as np
 

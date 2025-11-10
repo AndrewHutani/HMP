@@ -6,16 +6,16 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from siMLPe_mlp import build_mlps
+from models.physmop.siMLPe_mlp import build_mlps
 from einops.layers.torch import Rearrange
 
-from utils.utils import remove_singlular_batch, smoothness_constraint
+from models.physmop.utils.utils import remove_singlular_batch, smoothness_constraint
 
-import utils.config as config
-import utils.constants as constants
+import models.physmop.utils.config as config
+import models.physmop.utils.constants as constants
 
 import time
-from prediction_times import prediction_times
+from models.prediction_times import prediction_times
 
 class Fusion(nn.Module):
     def __init__(self):

@@ -3,7 +3,7 @@ import os, sys
 from scipy.spatial.transform import Rotation as R
 
 import numpy as np
-from config import config
+from gcnext_model.config import config
 from model import GCNext as Model
 from datasets.h36m_eval import H36MEval
 from utils.misc import rotmat2xyz_torch, rotmat2euler_torch

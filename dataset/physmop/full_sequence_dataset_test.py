@@ -5,8 +5,8 @@ import pickle
 
 from torch.utils.data import Dataset
 
-import utils.config as config
-import utils.constants as constants
+import models.physmop.utils.config as config
+import models.physmop.utils.constants as constants
 
 class BaseDataset_test(Dataset):
     def __init__(self, dataset, dataset_paths, hist_length, filter_str=None):

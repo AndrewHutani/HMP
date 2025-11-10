@@ -5,9 +5,9 @@ import os
 import glob
 
 from tqdm import tqdm
-from config import config
+from gcnext_model.config import config
 
-from realtime import RealTimePrediction
+from gcnext_model.RealtimeGCNext import RealtimeGCNext
 
 from model import GCNext as Model
 from datasets.h36m_eval import H36MEval
@@ -30,7 +30,7 @@ with open(log_filename, "w") as log_file:
     with torch.no_grad():
         directory = "data/data_processed/physmop_to_gcn"
 
-        realtime_predictor = RealTimePrediction(model, config, tau=0.5)
+        realtime_predictor = RealtimeGCNext(model, config, tau=0.5)
         visualize = False
         debug = False
         mpjpe_upper_all_samples = []

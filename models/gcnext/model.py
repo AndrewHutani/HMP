@@ -2,7 +2,7 @@ import copy
 
 import torch
 from torch import nn
-from dynamic_layer import build_dynamic_layers
+from models.gcnext.dynamic_layer import build_dynamic_layers
 
 from einops.layers.torch import Rearrange
 

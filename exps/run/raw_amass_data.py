@@ -1,4 +1,4 @@
-from RealtimePhysMop import RealtimePhysMop
+from exps.physmop_model.RealtimePhysMop import RealtimePhysMop
 from dataset.action_aware_dataset import ActionAwareDataset
 from torch.utils.data import DataLoader
 from visualize_motion import visualize_motion_with_ground_truth, visualize_continuous_motion
