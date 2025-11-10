@@ -16,6 +16,8 @@ from matplotlib.animation import FuncAnimation
 from prediction_times import prediction_times
 from visualize_motion import visualize_continuous_motion
 
+from tqdm import tqdm
+
 import torch.nn.functional as F
 import math
 
@@ -199,7 +201,6 @@ for walking_sample, _ in dataset.get_full_sequences_for_action(action):
     output_len = config.motion.h36m_target_length_eval
 
     num_predictions_per_rate = []
-
     for downsample_rate in downsample_rates:
         mpjpe_data_per_downsample_rate = []
         print(f"Downsample rate: {downsample_rate:.2f}")
@@ -215,42 +216,30 @@ for walking_sample, _ in dataset.get_full_sequences_for_action(action):
             max_start_idx = max(0, max_start_idx)
 
         stride = 1
-        print(f"Max start idx: {max_start_idx}")
+        mpjpe_data_per_downsample_rate = []
+
         for start_idx in tqdm(range(0, max_start_idx + 1, stride), desc="Processing"):
-            # 1. Resample only the input part
+            # Resample input and output
             src_span = int(round(input_len * downsample_rate))
             src_end = min(start_idx + src_span, walking_sample.shape[0])
-            input_resampled = resample_sequence(
+            sequence_resampled = resample_sequence(
                                 walking_sample,
                                 downsample_rate,
-                                input_len,
+                                total_length,
                                 start_idx=start_idx,
                                 antialias=False
                             )
-
-            output_start = src_end
-            output_end = output_start + output_len
-            # Make sure we don't go out of bounds
-            if output_end > walking_sample.shape[0]:
-                break
-            output = walking_sample[output_start:output_end]
-
-            # 4. Concatenate for evaluation
-            walking_sample_resampled = torch.cat([input_resampled, output], dim=0)
-            test_input_ = walking_sample_resampled[:config.motion.h36m_input_length]
-            ground_truth = walking_sample_resampled[config.motion.h36m_input_length:]
+            test_input_ = sequence_resampled[:config.motion.h36m_input_length]
+            ground_truth = sequence_resampled[config.motion.h36m_input_length:]
             realtime_predictor.batch_predict(test_input_, ground_truth, visualize=False, debug=False)
             mpjpe_data = realtime_predictor.evaluate() # Shape (4, )
-            # visualize_continuous_motion(walking_sample_resampled, skeleton_type='h36m',
+            # visualize_continuous_motion(sequence_resampled, skeleton_type='h36m',
             #                             save_gif_path='output_{}.gif'.format(downsample_rate))
 
 
             mpjpe_data_per_downsample_rate.append(mpjpe_data)
-            # visualize_continuous_motion(walking_sample_resampled, skeleton_type='h36m',
-            #                             save_gif_path='output_{}.gif'.format(downsample_rate))
             # break
         num_predictions_per_rate.append(len(mpjpe_data_per_downsample_rate))
-        # break
         mpjpe_data_per_sample.append(np.mean(np.array(mpjpe_data_per_downsample_rate), axis=0))
     total_number_of_predictions.append(num_predictions_per_rate)
     mpjpe_data_all.append(np.array(mpjpe_data_per_sample))
@@ -264,8 +253,8 @@ mpjpe_data_std = np.std(mpjpe_data_all, axis=0)  # shape: (num_downsample_rates,
 mean_with_n = np.column_stack((mpjpe_data_mean, total_number_of_predictions))
 header = ["80ms", "400ms", "560ms", "1000ms", "n_predictions"]
 
-np.savetxt("resampled_gcn_consistent_output_gcn_mean.csv", mean_with_n, delimiter=",",  header=",".join(header))
-np.savetxt("resampled_gcn_consistent_output_gcn_std.csv", mpjpe_data_std, delimiter=",")
+np.savetxt("resampled_gcn_matching_output_gcn_mean.csv", mean_with_n, delimiter=",",  header=",".join(header))
+np.savetxt("resampled_gcn_matching_output_gcn_std.csv", mpjpe_data_std, delimiter=",")
 
 plt.figure()
 for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
