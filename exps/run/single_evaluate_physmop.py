@@ -9,57 +9,425 @@ import utils.config as config
 from prediction_times import prediction_times
 import time
 import numpy as np
+import torch
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
+import torch.nn.functional as F
+import os
+import math
+
+def compute_confidence_interval(mean, std, n, confidence=0.95):
+    """
+    mean: array of means
+    std: array of standard deviations
+    n: sample size (number of runs)
+    confidence: confidence level (default 0.95)
+    Returns lower and upper bounds for the confidence interval
+    """
+    from scipy.stats import norm
+    z = norm.ppf(1 - (1 - confidence) / 2)  # z-score for 95% CI ≈ 1.96
+    errors = []
+    for i, std_per_resample_rate in enumerate(std):
+        error = z * std_per_resample_rate / np.sqrt(n[i])
+        errors.append(error)
+    return mean, np.array(errors)
+
+def export_mean_error_resample_rate_csv(
+    mean, error, filename,
+    resample_rates=None, time_labels=None
+):
+    """
+    Exports mean±error to a CSV file.
+    Each row: Number of input frames, mean±error at 80ms, ..., mean±error at 1000ms
+    """
+    import csv
+    num_resample_rates = mean.shape[0]
+    num_timesteps = mean.shape[1]
+    if resample_rates is None:
+        resample_rates = list(range(num_resample_rates))
+    if time_labels is None:
+        time_labels = ["80ms", "400ms", "560ms", "1000ms"]
+
+    with open(filename, "w", newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        header = (
+            ["Resample rate"] +
+            [f"Mean\pmerror at {label}" for label in time_labels]
+        )
+        writer.writerow(header)
+        for idx in range(num_resample_rates):
+            row = [f"{resample_rates[idx]:.2f}"]
+            for t in range(num_timesteps):
+                val = f"{mean[idx, t]:.2f}\pm {error[idx, t]:.2f}"
+                row.append(val)
+            writer.writerow(row)
+
+def _hann_lowpass_1d(x, cutoff_frac, k_min=5):
+    """
+    x: [B, T, F...] (time=dim1). cutoff_frac in (0,1], relative to Nyquist (1.0 == Nyquist).
+    Simple Hann-windowed low-pass via depthwise 1D conv along time.
+    """
+    B, T = x.shape[0], x.shape[1]
+    if T < 3:
+        return x
+
+    # Kernel length ~ 8/cutoff; keep odd
+    k = max(k_min, int(math.ceil(8 / max(1e-6, cutoff_frac)))) | 1
+    t = torch.arange(k, device=x.device, dtype=x.dtype)
+    n = t - (k - 1) / 2
+
+    # cutoff_frac is relative to Nyquist=0.5 cycles/sample -> normalized cutoff fc (cycles/sample)
+    fc = 0.5 * cutoff_frac  # so cutoff_frac=1.0 means fc=0.5 (Nyquist)
+    # sinc kernel (torch.sinc uses π-normalization: sinc(x)=sin(πx)/(πx))
+    h = torch.sinc((2 * fc) * n)
+    # Hann window
+    w = 0.5 - 0.5 * torch.cos(2 * math.pi * (t / (k - 1)))
+    h = (h * w).to(x.dtype)
+    h = h / h.sum()  # DC gain = 1
+
+    pad = k // 2
+    x_flat = x.reshape(B, T, -1).transpose(1, 2)  # [B, F, T]
+    h = h.view(1, 1, k).to(x.device, x.dtype)
+    y = F.conv1d(F.pad(x_flat, (pad, pad), mode='replicate'),
+                 h.expand(x_flat.shape[1], 1, k),
+                 groups=x_flat.shape[1])
+    return y.transpose(1, 2).reshape_as(x)
+
+def resample_with_history_boundary_anchored(x_hist, N, alpha, antialias = True):
+    """
+    Resample a sequence x_hist of length L to a new length N, keeping the last frame fixed.
+    The resampling is anchored at the history boundary (last frame of x_hist).
+    Args:
+        x_hist: Input sequence of shape (L, D)
+        N: Desired output length
+        alpha: Resampling factor (N / L)
+        antialias: Whether to apply anti-aliasing filter when downsampling
+    """
+    B, T_h = x_hist.shape[0], x_hist.shape[1]
+
+    # Anti-alias if downsampling
+    if antialias and alpha > 1.0 and T_h > 8:
+        # cutoff relative to Nyquist: 1/alpha (<=1). Use a small safety margin.
+        cutoff_frac = min(1.0 / alpha, 0.9)
+        x_hist = _hann_lowpass_1d(x_hist, cutoff_frac)
+    
+    # Build target times anchored at the last frame
+    t_last = T_h - 1
+    t = torch.arange(N, device=x_hist.device, dtype=x_hist.dtype)
+    t_target = t_last - t * float(alpha)                # newest->oldest
+    # print("Resampling with alpha =", alpha)
+    # print("t_target before clamp:", t_target)
+    t_target = torch.clamp(t_target, 0, T_h - 1)
+
+    t0 = torch.floor(t_target).long()
+    t1 = torch.clamp(t0 + 1, max=T_h - 1)
+    w = (t_target - t0.to(t_target.dtype)).view(1, N, *([1] * (x_hist.dim() - 2)))
+
+    x0 = x_hist[:, t0, ...]
+    x1 = x_hist[:, t1, ...]
+    y  = (1 - w) * x0 + w * x1
+    # reverse to chronological order (oldest -> newest)
+    return torch.flip(y, dims=[1])
+
+
+time_idx = [2, 10, 14, 25]
+selected_indices = [t + config.hist_length - 1 for t in time_idx]
 
 ds = "AMASS" 
 if __name__ == "__main__":
-    realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
-    # Option 2: Load only walking data
-    # print("\n=== Loading walking data only ===")
-    # walking_dataset = ActionAwareDataset(
-    #     'data/data_processed/h36m_test_50.pkl',
-    #     specific_action='walking'
-    # )
-    data_loader = DataLoader(dataset=BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length, filter_str="treadmill"),
-                                batch_size=1,
-                                shuffle=False,
-                                num_workers=8)
+    # Load in performance logs mpjpe_physmop_data.txt, mpjpe_physmop_physics.txt, mpjpe_physmop_fusion.txt if they exist and store in array
+
+    mpjpe_data_all = None
+    mpjpe_physics_gt_all = None
+    mpjpe_fusion_all = None
+    downsample_rates = np.arange(3, 0.1, -0.2)
+
+    if os.path.exists("resampled_physmop_data_consistent_output_mean.csv"):
+        mpjpe_data_all = np.loadtxt("resampled_physmop_data_consistent_output_mean.csv", delimiter=",")
+    if os.path.exists("resampled_physmop_physics_consistent_output_mean.csv"):
+        mpjpe_physics_gt_all = np.loadtxt("resampled_physmop_physics_consistent_output_mean.csv", delimiter=",")
+    if os.path.exists("resampled_physmop_fusion_consistent_output_mean.csv"):
+        mpjpe_fusion_all = np.loadtxt("resampled_physmop_fusion_consistent_output_mean.csv", delimiter=",")
+
+    if os.path.exists("resampled_physmop_data_consistent_output_std.csv"):
+        mpjpe_data_std_all = np.loadtxt("resampled_physmop_data_consistent_output_std.csv", delimiter=",")
+    if os.path.exists("resampled_physmop_physics_consistent_output_std.csv"):
+        mpjpe_physics_gt_std_all = np.loadtxt("resampled_physmop_physics_consistent_output_std.csv", delimiter=",")
+    if os.path.exists("resampled_physmop_fusion_consistent_output_std.csv"):
+        mpjpe_fusion_std_all = np.loadtxt("resampled_physmop_fusion_consistent_output_std.csv", delimiter=",")
+
+    # Check if all three arrays were loaded
+    if mpjpe_data_all is not None and mpjpe_physics_gt_all is not None and mpjpe_fusion_all is not None:
+        print("Performance logs found.")      
     
-    # walking_loader = DataLoader(walking_dataset, batch_size=1, shuffle=False)
-    # print(f"Total batches in data_loader: {len(walking_loader)}")
-    latency_times = []
+    else:
+        print("Performance logs not found. Running evaluation...")
+        with torch.no_grad():
 
-    # Process first walking sample
-    for batch_idx, batch in enumerate(data_loader):
-        print(f"Processing sample {batch_idx}")
-        # print(f"Action: {batch['action'][0]}")
-        # print(f"File: {batch['file_path'][0]}")
-        # print("Batch keys:", batch.keys())
-        # print("Root joint:", batch['q'][:, :25, :3])
-        print(f"Batch shape: {batch['q'].shape}")
-        print(f"Batch file paths: {batch['file_paths']}")
-        num_of_samples = len(batch['file_paths'])
-        del batch['file_paths']
-        # # Use a sliding window of some sort to feed the model the correct amount of data
-        for i in range(num_of_samples):
-            input_batch = {key: value[:,i*config.total_length:i*config.total_length+config.total_length] for key, value in batch.items()}
-            print(f"Input batch shape: {input_batch['q'].shape} of type {type(input_batch['q'])}")
+            realtime_model = RealtimePhysMop('ckpt/PhysMoP/2023_12_21-17_09_24_20364.pt', device='cpu')
+            # Option 2: Load only walking data
+            # print("\n=== Loading walking data only ===")
+            # walking_dataset = ActionAwareDataset(
+            #     'data/data_processed/h36m_test_50.pkl',
+            #     specific_action='walking'
+            # )
+            data_loader = DataLoader(dataset=BaseDataset_test(ds, config.DATASET_FOLDERS_TEST, config.hist_length, filter_str="treadmill_norm"),
+                                        batch_size=1,
+                                        shuffle=False,
+                                        num_workers=8)
+            
+            mpjpe_data_all = []
+            mpjpe_physics_gt_all = []
+            mpjpe_fusion_all = []
 
-            t0 = time.perf_counter()
-            model_output, batch_info = realtime_model.predict(input_batch)
-            t1 = time.perf_counter()
-            latency_times.append(t1 - t0)
-            gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(
-                model_output, batch_info, mode='test'
-            )
-            visualize_continuous_motion(gt_J)
+            num_rates = len(downsample_rates)
+            # Aggregate MPJPEs for each rate (across all samples/windows)
+            mpjpe_data_by_rate = [[] for _ in range(num_rates)]
+            mpjpe_physics_by_rate = [[] for _ in range(num_rates)]
+            mpjpe_fusion_by_rate = [[] for _ in range(num_rates)]
+            preds_count_by_rate = [0 for _ in range(num_rates)]
+            # Process first walking sample
+            for batch_idx, batch in enumerate(tqdm(data_loader, desc="Processing samples")):
+                # print(f"Action: {batch['action'][0]}")
+                # print(f"File: {batch['file_path'][0]}")
+                # print("Batch keys:", batch.keys())
+                # print("Root joint:", batch['q'][:, :25, :3])
+                # print(f"Batch shape: {batch['q'].shape}")
+                # print(f"Batch file paths: {batch['file_paths']}")
+                
+                del batch['file_paths']
 
-        avg_latency = sum(latency_times) / len(latency_times)
-        print(f"Average latency for processing {batch_idx + 1} samples: {avg_latency:.4f} seconds")
-        jitter = np.std(latency_times)
-        print(f"Jitter in latency: {jitter:.6f} seconds")
-        if prediction_times:
-            prediction_times = np.array(prediction_times)
-            avg_prediction_times = np.mean(prediction_times, axis=0)
-            print(f"Average prediction times: {avg_prediction_times}")
-        break
+                for rate_idx, downsample_rate in enumerate(downsample_rates):
+                    processed_batch = {}
+
+                    input_len = config.hist_length
+                    total_len = config.total_length
+                    output_len = total_len - input_len
+
+                    # Compute max_start_idx for sliding window
+                    if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
+                        max_end_index = int(round(total_len * downsample_rate))
+                        max_start_idx = batch['q'].shape[1] - max_end_index
+                        max_start_idx = max(0, max_start_idx)
+                    else:
+                        max_start_idx = batch['q'].shape[1] - total_len
+                        max_start_idx = max(0, max_start_idx)
+                    stride = 20
+                    for start_idx in range(0, max_start_idx + 1, stride):
+                        processed_batch = {}
+
+                        if downsample_rate >= 1.0 or np.isclose(downsample_rate, 1.0):
+                            src_span = int(round(input_len * downsample_rate))
+                            src_start = start_idx
+                            src_end = min(start_idx + src_span, batch['q'].shape[1])
+
+                            # Downsample only the input part, then take the next output_len frames at original rate
+                            for k, v in batch.items():
+                                if not isinstance(v, torch.Tensor):
+                                    processed_batch[k] = v
+                                    continue
+
+                                # 1) Take the original input history support on the native grid
+                                src_input = v[:, src_start:src_end, ...]  # [B, input_len, ...] chronological
+
+                                # 2) Resample the input history uniformly at factor alpha, anchored at the boundary
+                                #    (no jitter, no duplicates; with anti-alias for alpha>1)
+                                res_in = resample_with_history_boundary_anchored(src_input, input_len, float(downsample_rate), antialias=False)
+
+                                # 3) Keep output at original sampling rate, aligned to the original boundary
+
+                                output_indices = np.arange(src_end,
+                                                        src_end + output_len)
+                                # print("Output indices:", output_indices)
+                                output_indices = np.clip(output_indices, 0, v.shape[1] - 1)
+                                out_sel = torch.index_select(v, 1, torch.from_numpy(output_indices).to(v.device))
+
+                                # 4) Concatenate input (resampled) + output (original grid)
+                                processed_batch[k] = torch.cat([res_in, out_sel], dim=1)
+
+                        else:
+                            # Upsample input: interpolate the input portion, then take following output frames
+                            upsample_factor = 1.0 / downsample_rate
+                            for k, v in batch.items():
+                                if not isinstance(v, torch.Tensor):
+                                    processed_batch[k] = v
+                                    continue
+
+                                # take the original input slice (first input_len frames of the available sequence)
+                                src_input = v[:, start_idx:start_idx + input_len, ...]  # [B, input_len, ...]
+                                # prepare for interpolation: [B, features, time]
+                                b, t = src_input.shape[0], src_input.shape[1]
+                                rest_shape = src_input.shape[2:]
+                                feat = int(np.prod(rest_shape))
+                                src_perm = src_input.reshape(b, t, feat).permute(0, 2, 1)  # [B, feat, time]
+                                new_time = int(np.round(t * upsample_factor))
+                                # interpolate per-batch by looping (F.interpolate expects 3D or 4D; do each batch separately)
+                                upsampled = []
+                                for bi in range(b):
+                                    up = F.interpolate(src_perm[bi:bi+1], size=new_time, mode='linear', align_corners=True)
+                                    upsampled.append(up)
+                                upsampled = torch.cat(upsampled, dim=0)  # [B, feat, new_time]
+                                up_perm = upsampled.permute(0, 2, 1).reshape(b, new_time, *rest_shape)
+                                # take last input_len frames of upsampled (or pad/truncate)
+                                up_input = up_perm[:, -input_len:, ...]
+
+                                # keep original output frames after the original input_end
+                                original_last_input_idx = start_idx + input_len - 1
+                                output_indices = np.arange(original_last_input_idx + 1, original_last_input_idx + 1 + output_len)
+                                output_indices = np.clip(output_indices, 0, v.shape[1] - 1)
+                                out_sel = torch.index_select(v, 1, torch.from_numpy(output_indices).to(v.device))
+
+                                processed_batch[k] = torch.cat([up_input, out_sel], dim=1)
+
+
+                        # now processed_batch contains input (resampled) + original-rate output for feeding to model
+                        model_output, batch_info = realtime_model.predict(processed_batch)
+                        gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion = realtime_model.model_output_to_3D_joints(model_output, batch_info, mode='test')
+
+                        eval_results = realtime_model.evaluation_metrics(gt_J, pred_J_data, pred_J_physics_gt, pred_J_fusion)
+
+                        mpjpe_data = np.mean([eval_results['error_test_data_upper'][0], eval_results['error_test_data_lower'][0]], axis=0)
+                        mpjpe_physics = np.mean([eval_results['error_test_physics_gt_upper'][0], eval_results['error_test_physics_gt_lower'][0]], axis=0)
+                        mpjpe_fusion = np.mean([eval_results['error_test_fusion_upper'][0], eval_results['error_test_fusion_lower'][0]], axis=0)
+
+                        # Aggregate all selected indices for this rate
+                        mpjpe_data_by_rate[rate_idx].append(mpjpe_data[selected_indices])
+                        mpjpe_physics_by_rate[rate_idx].append(mpjpe_physics[selected_indices])
+                        mpjpe_fusion_by_rate[rate_idx].append(mpjpe_fusion[selected_indices])
+                        preds_count_by_rate[rate_idx] += 1
+
+
+
+        # Compute mean and std for each rate
+        mpjpe_data_mean = np.array([np.mean(mpjpe_data_by_rate[i], axis=0) for i in range(num_rates)])
+        mpjpe_data_std  = np.array([np.std(mpjpe_data_by_rate[i], axis=0)  for i in range(num_rates)])
+        mpjpe_physics_mean = np.array([np.mean(mpjpe_physics_by_rate[i], axis=0) for i in range(num_rates)])
+        mpjpe_physics_std  = np.array([np.std(mpjpe_physics_by_rate[i], axis=0)  for i in range(num_rates)])
+        mpjpe_fusion_mean = np.array([np.mean(mpjpe_fusion_by_rate[i], axis=0) for i in range(num_rates)])
+        mpjpe_fusion_std  = np.array([np.std(mpjpe_fusion_by_rate[i], axis=0)  for i in range(num_rates)])
+
+        # Save prediction counts per downsample rate
+        mpjpe_counts_all = np.array(preds_count_by_rate)
+        print("Predictions per downsample rate:", mpjpe_counts_all)
+
+        # Save performance logs
+        mpjpe_data_mean = np.column_stack((mpjpe_data_mean, mpjpe_counts_all))
+        mpjpe_physics_mean = np.column_stack((mpjpe_physics_mean, mpjpe_counts_all))
+        mpjpe_fusion_mean = np.column_stack((mpjpe_fusion_mean, mpjpe_counts_all))
+        header = ["80ms", "400ms", "560ms", "1000ms", "n_predictions"]
+        np.savetxt("resampled_physmop_data_consistent_output_mean.csv", mpjpe_data_mean, delimiter=",", header=",".join(header))
+        np.savetxt("resampled_physmop_physics_consistent_output_mean.csv", mpjpe_physics_mean, delimiter=",", header=",".join(header))
+        np.savetxt("resampled_physmop_fusion_consistent_output_mean.csv", mpjpe_fusion_mean, delimiter=",", header=",".join(header))
+        np.savetxt("resampled_physmop_data_consistent_output_std.csv", mpjpe_data_std, delimiter=",")
+        np.savetxt("resampled_physmop_physics_consistent_output_std.csv", mpjpe_physics_std, delimiter=",")
+        np.savetxt("resampled_physmop_fusion_consistent_output_std.csv", mpjpe_fusion_std, delimiter=",")
+
+
+    mjpe_gcnext_all = np.loadtxt("resampled_gcn_consistent_output_gcn_mean.csv", delimiter=",")
+    mjpe_gcnext_std_all = np.loadtxt("resampled_gcn_consistent_output_gcn_std.csv", delimiter=",")
+    
+    # Seperate mean and n_predictions for all logs
+    mpjpe_data_all, data_n_predictions = mpjpe_data_all[:, :-1], mpjpe_data_all[:, -1]
+    data_mean, data_confidence_interval = compute_confidence_interval(mpjpe_data_all, mpjpe_data_std_all, data_n_predictions)
+
+    mpjpe_physics_gt_all, physics_n_predictions = mpjpe_physics_gt_all[:, :-1], mpjpe_physics_gt_all[:, -1]
+    physics_mean, physics_confidence_interval = compute_confidence_interval(mpjpe_physics_gt_all, mpjpe_physics_gt_std_all, physics_n_predictions)
+
+    mpjpe_fusion_all, fusion_n_predictions = mpjpe_fusion_all[:, :-1], mpjpe_fusion_all[:, -1]
+    fusion_mean, fusion_confidence_interval = compute_confidence_interval(mpjpe_fusion_all, mpjpe_fusion_std_all, fusion_n_predictions)
+
+    mjpe_gcnext_all, gcnext_n_predictions = mjpe_gcnext_all[:, :-1], mjpe_gcnext_all[:, -1]
+    gcnext_mean, gcnext_confidence_interval = compute_confidence_interval(mjpe_gcnext_all, mjpe_gcnext_std_all, gcnext_n_predictions)
+
+    # Export CSVs for easy table generation
+    export_mean_error_resample_rate_csv(
+        data_mean, data_confidence_interval,
+        "resampled_physmop_data_consistent_output_mean_with_error.csv",
+        resample_rates=downsample_rates,
+        time_labels=["80ms", "400ms", "560ms", "1000ms"]
+    )
+    export_mean_error_resample_rate_csv(
+        physics_mean, physics_confidence_interval,
+        "resampled_physmop_physics_consistent_output_mean_with_error.csv",
+        resample_rates=downsample_rates,
+        time_labels=["80ms", "400ms", "560ms", "1000ms"]
+    )
+    export_mean_error_resample_rate_csv(
+        gcnext_mean, gcnext_confidence_interval,
+        "resampled_gcn_consistent_output_gcn_mean_with_error.csv",
+        resample_rates=downsample_rates,
+        time_labels=["80ms", "400ms", "560ms", "1000ms"]
+    )
+    
+    branch_results = {
+        "data": data_mean,
+        "physics_gt": physics_mean,
+        "fusion": fusion_mean,
+        "gcnext": gcnext_mean
+    }
+    branch_titles = {
+        "data": "MPJPE for the data branch vs Downsample Rate",
+        "physics_gt": "MPJPE for the physics branch vs Downsample Rate",
+        "fusion": "MPJPE for the fusion branch vs Downsample Rate",
+        "gcnext": "MPJPE for the GCNext model vs Downsample Rate"
+    }
+    branch_filenames = {
+        "data": "mpjpe_vs_downsample_rate_data.png",
+        "physics_gt": "mpjpe_vs_downsample_rate_physics.png",
+        "fusion": "mpjpe_vs_downsample_rate_fusion.png",
+        "gcnext": "mpjpe_vs_downsample_rate_gcnext.png"
+    }
+
+    all_arrays = [
+    data_mean,
+    physics_mean,
+    fusion_mean,
+    gcnext_mean
+    ]
+
+    all_data = np.concatenate([arr.flatten() for arr in all_arrays if arr is not None])
+    y_min = np.min(all_data[all_data > 0])  # Avoid zero for log scale
+    y_max = np.percentile(all_data, 100)
+    y_limits = (y_min, y_max)
+
+    for branch, results in branch_results.items():
+        plt.figure()
+        for i, label in enumerate(["80ms", "400ms", "560ms", "1000ms"]):
+            plt.plot(downsample_rates, results[:, i], marker='o', label=label)
+        plt.xlabel(r'Resample rate $\alpha$', fontsize=16)
+        plt.ylabel(r'Mean MPJPE (mm)', fontsize=16)
+        plt.title(branch_titles[branch], fontsize=16)
+        plt.tick_params(axis='both', which='major', labelsize=12)
+        plt.gca().invert_xaxis()
+        plt.grid(True)
+        # plt.legend(title='Prediction horizon')
+        plt.ylim(y_limits)
+        plt.savefig(branch_filenames[branch])
+        plt.close()
+    
+    labels = ["80ms", "400ms", "560ms", "1000ms"]
+    markers = ['o', 'o', 'o', 'o']
+    colors = ['C0', 'C1', 'C2', 'C3']
+
+    fig, ax = plt.subplots(figsize=(4, 1))
+    lines = [
+        plt.Line2D([0], [0], marker = markers[i], color=colors[i], linestyle='-', label=labels[i], linewidth=1.5)
+        for i in range(len(labels))
+    ]
+    legend = ax.legend(
+        handles=lines,
+        title='Prediction horizon',
+        loc='lower center',
+        frameon=False,
+        fontsize=11,
+        title_fontsize=12,
+        ncol=len(labels),  # All in one row
+        handletextpad=2,   # Increase space between marker and label
+        columnspacing=2
+    )
+    legend.get_title().set_position((0,10))
+    ax.axis('off')
+
+    fig.savefig("legend_prediction_horizon.png", bbox_inches='tight', pad_inches=0.05)
+    plt.close(fig)
