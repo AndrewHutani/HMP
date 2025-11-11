@@ -43,7 +43,6 @@ for sample_idx, (walking_sample, root_sample) in enumerate(walking_samples[:2]):
         t0 = time.perf_counter()
         realtime_predictor.predict(test_input_, ground_truth, visualize=False, debug=False)
         t1 = time.perf_counter()
-        global_observed_motion = realtime_predictor.add_global_translation()  # Add global translation to the predicted motion
         latency_times.append(t1 - t0)
 
 if prediction_times:
@@ -53,5 +52,6 @@ if prediction_times:
     print(f"Average prediction time: {avg_prediction_time:.2f} ms")
     print(f"Average end-to-end latency time (including data prep): {avg_latency_time:.2f} ms")
     print(f"Average single forward pass time: {avg_single_forward_pass_time:.2f} ms")
-
+    jitter = np.std(latency_times) * 1000 if latency_times else 0
+    print(f"Jitter in latency: {jitter:.2f} ms")
 
