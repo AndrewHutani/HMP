@@ -12,13 +12,13 @@ from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-84000.pth", help='=encoder path')
+parser.add_argument('--model-pth', type=str, default="ckpt/baseline/hist_length_25_pred_length_25.pth", help='=encoder path')
 parser.add_argument('--dyna', nargs='+', type=int, default=[0, 48], help='dynamic layer index')
 args = parser.parse_args()
 
 # Prepare model
 model = Model(config, args.dyna)
-state_dict = torch.load(args.model_pth)
+state_dict = torch.load(args.model_pth, map_location='cpu')
 model.load_state_dict(state_dict, strict=True)
 
 
