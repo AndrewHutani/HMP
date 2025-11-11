@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from exps.visualize_motion import visualize_continuous_motion, visualize_motion_with_ground_truth
 
 from tqdm import tqdm
+import importlib
+
 
 @dataclass
 class BatchInfo:
@@ -27,14 +29,23 @@ class BatchInfo:
 
 
 class RealtimePhysMop:
-    def __init__(self, checkpoint_path, device='auto'):
+    def __init__(self, checkpoint_path, device='auto', input_length=None):
         self.set_device(device)
              
         self.smpl = SMPL(device=self.device)
         self.smplh_m = SMPLH(gender='male', device=self.device)
         self.smplh_f = SMPLH(gender='female', device=self.device)
 
-        self.model = PhysMoP(hist_length=config.hist_length,
+        # Decide which PhysMoP to use
+        if input_length is None or input_length == 25:
+            # This is the default original PhysMoP
+            physmop_module = importlib.import_module("models.physmop.PhysMoP")
+        else:
+            physmop_module = importlib.import_module("models.physmop.modified_PhysMoP")
+
+        PhysMoPClass = getattr(physmop_module, "PhysMoP")
+        
+        self.model = PhysMoPClass(hist_length=config.hist_length,
                                        physics=True,
                                        data=True,
                                        fusion=True,

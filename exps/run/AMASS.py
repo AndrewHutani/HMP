@@ -25,7 +25,7 @@ import numpy as np
 import torch
 device = torch.device('cpu')
 
-from utils.utils import batch_rodrigues, rotmat2eulerzyx, rotmat2euleryzx, rotmat2eulerzxy
+from models.physmop.utils.utils import batch_rodrigues, rotmat2eulerzyx, rotmat2euleryzx, rotmat2eulerzxy
 from scipy.ndimage import gaussian_filter1d, median_filter
 
 # %%
@@ -126,7 +126,7 @@ import pickle
 
 amass_dir = 'data/amass'
 save_dir = 'data/data_processed'
-seqlen = 8 + 25
+seqlen = 12 + 25
 
 smooth_sigma = 6
 smooth_sigma_va = 8
