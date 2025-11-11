@@ -42,7 +42,6 @@ def add_path(path):
 add_path(osp.join(C.root_dir, 'lib'))
 
 """Data Dir and Weight Dir"""
-# TODO
 
 """Dataset Config"""
 C.h36m_anno_dir = osp.join(C.root_dir, 'data/h36m/')
@@ -50,7 +49,7 @@ C.motion = edict()
 
 C.motion.h36m_input_length = 50
 C.motion.h36m_input_length_dct = 50
-C.motion.h36m_target_length_train = 25
+C.motion.h36m_target_length_train = 10
 C.motion.h36m_target_length_eval = 25
 C.motion.dim = 66
 

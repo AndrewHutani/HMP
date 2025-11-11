@@ -13,6 +13,7 @@ class GCNext(nn.Module):
         seq = self.config.motion_mlp.seq_len
         input_len = self.config.motion.h36m_input_length
         input_len_dct = self.config.motion.h36m_input_length_dct
+        print(input_len_dct)
         dim = self.config.motion.dim
 
 
