@@ -7,19 +7,6 @@ from matplotlib.lines import Line2D
 save_directory = "exps/E_reduced_input_history/performance_logs/"
 figure_directory = "exps/E_reduced_input_history/figures/"
 
-physmop_hist_lengths = [8, 12, 16, 20, 25]
-physmop_prediction_data = [5.93, 6.14, 5.97, 6.26, 6.26] # Prediction times in ms
-physmop_latency_data = [86.30, 87.37, 88.75, 88.39, 92.42] # Latency times in ms
-physmop_jitter = [11.75, 10.90, 13.46, 13.92, 11.83] # Jitter times in ms
-
-physmop_files = [
-    save_directory + "physmop_data_mpjpe_log_hist_length_8.txt",
-    save_directory + "physmop_data_mpjpe_log_hist_length_12.txt",
-    save_directory + "physmop_data_mpjpe_log_hist_length_16.txt",
-    save_directory + "physmop_data_mpjpe_log_hist_length_20.txt",
-    save_directory + "physmop_data_mpjpe_log_front_to_back.txt"
-]
-
 gcn_hist_lengths =      [8,     12,     16,     20,     25,     50]
 gcn_prediction_data =   [71.15, 53.94,  54.57,  67.94,  69.12,  76.02] # Prediction times in ms
 gcn_latency_data =      [71.53, 53.31,  54.94,  68.34,  69.55,  76.51] # Latency times in ms
@@ -34,6 +21,21 @@ gcn_files = [
     save_directory + "gcnext_hist_length_25.txt",
     save_directory + "gcnext_performance_front_to_back.txt"
 ]
+
+
+physmop_hist_lengths = [8, 12, 16, 20, 25]
+physmop_prediction_data = [5.93, 6.14, 5.97, 6.26, 6.26] # Prediction times in ms
+physmop_latency_data = [86.30, 87.37, 88.75, 88.39, 92.42] # Latency times in ms
+physmop_jitter = [11.75, 10.90, 13.46, 13.92, 11.83] # Jitter times in ms
+
+physmop_files = [
+    save_directory + "physmop_data_mpjpe_log_hist_length_8.txt",
+    save_directory + "physmop_data_mpjpe_log_hist_length_12.txt",
+    save_directory + "physmop_data_mpjpe_log_hist_length_16.txt",
+    save_directory + "physmop_data_mpjpe_log_hist_length_20.txt",
+    save_directory + "physmop_data_mpjpe_log_front_to_back.txt"
+]
+
 
 # -------------------------------------------------------------------------------------------------
 actions = [
