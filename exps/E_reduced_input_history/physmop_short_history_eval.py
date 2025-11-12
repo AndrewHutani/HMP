@@ -3,7 +3,6 @@ from dataset.physmop.base_dataset_test import BaseDataset_test
 import numpy as np
 from tqdm import tqdm
 from models.physmop.RealtimePhysMop import RealtimePhysMop
-from models.physmop.modified_PhysMoP import PhysMoP
 import models.physmop.utils.config as config
 import torch
 
