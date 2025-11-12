@@ -10,7 +10,7 @@ from dataset.gcnext.h36m_eval import H36MEval
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model-pth', type=str, default="ckpt/baseline/model-iter-84000.pth", help='=encoder path')
+parser.add_argument('--model-pth', type=str, default="ckpt/baseline/hist_length_50.pth", help='=encoder path')
 parser.add_argument('--dyna', nargs='+', type=int, default=[0, 48], help='dynamic layer index')
 args = parser.parse_args()
 
