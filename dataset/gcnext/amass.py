@@ -3,7 +3,7 @@ import glob
 import numpy as np
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
-from utils.angle_to_joint import ang2joint
+from models.gcnext.lib.utils.angle_to_joint import ang2joint
 
 import torch
 import torch.utils.data as data
