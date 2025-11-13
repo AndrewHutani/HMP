@@ -1,3 +1,13 @@
 **/__pycache__/
 *.py[cod]
-data/
+data/**
+
+# BUT keep the top-level files inside data/
+!data/*.py
+!data/*.txt
+
+# Also keep the directories themselves (so structure exists)
+!data/amass/
+!data/data_processed/
+!data/h36m/
+!data/smpl_official/
