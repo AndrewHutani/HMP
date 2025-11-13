@@ -1,20 +1,85 @@
-# GCNext
-Code for AAAI 2024 paper "GCNext: Towards the Unity of Graph Convolutions for Human Motion Prediction"
+# Human Motion Prediction Experiments (Thesis Repository)
 
-Put h36m dataset in the ./data/h36m/ directory.
+This repository contains all experiments conducted for the **Master’s Thesis** on **Human Motion Prediction (HMP)**.  
+The project investigates how input history, temporal sampling, and model architecture affect accuracy and real-time feasibility of human motion prediction.
 
-The file structure should look like:
+Each experiment corresponds directly to a section in the thesis (Sections IV – V).  
+All experiments can be reproduced from pre-trained model checkpoints.
 
-./data/h36m/S1
+## Overview
 
-./data/h36m/S5
+Evaluate and compare **GCNext** and **PhysMoP** models under different experimental conditions:
+- Feeding direction (front-to-back vs back-to-front)  
+- Input sequence length  
+- Temporal resampling  
+- Real-time performance metrics  
+- Retrained short-history models
 
-./data/h36m/S6
+## Environment Setup
 
-./data/h36m/S7
+This project uses a Conda environment defined in `environment.yml`.
 
-./data/h36m/S8
+### Creating the environment
 
-./data/h36m/S9
+```bash
+conda env create -f environment.yml
+conda activate HMP
+```
 
-./data/h36m/S11
+## Repository Structure
+The repository has the following structure where the important directories are outlined
+
+
+```bash
+HMP/
+├─ ckpt/ # Model checkpoints
+├─ data/ # Raw and processed data
+├─ dataset/ # Modules for loading in processed data
+├─ exps/
+│ ├─ A_feeding_strategy/ # Section IV-A
+│ ├─ B_input_length/ # Section IV-B
+│ ├─ C_temporal_resolution/ # Section IV-C
+│ ├─ D_realtime_metrics/ # Section IV-D
+│ └─ E_reduced_input_history/ # Section V – V-A
+│
+├─ models/ # Model definitions
+├─ motion_examples/
+└─ README.md # This file
+```
+
+Each experiment folder includes:
+- A dedicated `README.md` with detailed instructions  
+- Python scripts to run the evaluations  
+- `figures/` with generated plots  
+- `performance_logs/` with `.txt` evaluation logs  
+
+All scripts must be run from the repository root using:
+```bash
+python -m exps.<experiment_folder>.<script_name_without_py>
+```
+## Experiment Summary
+
+| Experiment | Folder | Description | Thesis Section |
+|-------------|---------|-------------|----------------|
+| **A** | `A_feeding_strategy/` | Tests front-to-back vs back-to-front feeding for GCNext and PhysMoP. | IV-A |
+| **B** | `B_input_length/` | Evaluates how input window size affects prediction accuracy. | IV-B |
+| **C** | `C_temporal_resolution/` | Studies temporal resampling and consistent vs matching output frequencies. | IV-C |
+| **D** | `D_realtime_metrics/` | Benchmarks real-time metrics. | IV-D |
+| **E** | `E_reduced_input_history/` | Compares retrained short-history models and analyzes the accuracy–latency trade-off. | V – V-A |
+
+---
+
+## Training and Original Repositories
+
+Training and testing scripts are **not included** here.  
+To retrain or reproduce the checkpoints, refer to the official implementations:
+
+| Model | Original Repository |
+|--------|--------------------|
+| **GCNext** | [Original GCNext Repository](https://github.com/BradleyWang0416/GCNext) |
+| **PhysMoP** | [Original PhysMoP Repository](https://github.com/zhangy76/PhysMoP) |
+
+In this repository, only inference and evaluation scripts are provided.  
+Checkpoints from those repositories should be placed under `ckpt/` as shown above.
+
+---
