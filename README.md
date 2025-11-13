@@ -57,6 +57,23 @@ All scripts must be run from the repository root using:
 ```bash
 python -m exps.<experiment_folder>.<script_name_without_py>
 ```
+
+## Dataset Setup
+
+The AMASS dataset used in this project are **not included** in the repository, because the raw files are large (≈15 GB).  
+You must download them manually and place them in the correct directory structure before running the experiments.
+
+### Directory structure
+
+After downloading, your `data/amass/` directory should look like:
+
+```bash
+├─ amass/ # raw AMASS data (ignored by Git)
+│ ├─ BioMotionLab_NTroje/ # This is the evaluation set
+│ └─ ... (other AMASS sub-datasets if used for training)
+```
+Run the `AMASS.py` file with the desired sequence length, to create `.pkl` files that will be used by the model.
+
 ## Experiment Summary
 
 | Experiment | Folder | Description | Thesis Section |
